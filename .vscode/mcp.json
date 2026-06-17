@@ -9,6 +9,10 @@
         "EMBEDDING_MODEL": "nomic-embed-text",
         "OLLAMA_BASE_URL": "http://localhost:11434"
       }
+    },
+    "serena": {
+      "command": "serena",
+      "args": ["start-mcp-server", "--context=vscode"]
     }
   }
 }

@@ -4,7 +4,7 @@
 
 O projeto **Copilot Agents Local Setup** fornece uma arquitetura e um conjunto de ferramentas para implementar um sistema de *Retrieval-Augmented Generation* (RAG) 100% local, voltado para a análise avançada de código-fonte. A solução foi concebida para operar em ambientes de desenvolvimento corporativos restritos, especificamente em máquinas com sistema operacional Windows 11, onde o usuário não possui privilégios de administrador e não há disponibilidade de contêineres Docker.
 
-A integração principal ocorre com o **IntelliJ IDEA** (e opcionalmente VS Code) através do plugin **GitHub Copilot Chat**, utilizando o padrão *Model Context Protocol* (MCP). Isso permite que o assistente de inteligência artificial realize buscas semânticas profundas em todo o diretório de trabalho (`~/workspace`), auxiliando engenheiros de software especialistas na compreensão de arquiteturas complexas, mapeamento de dependências, análise de contratos de dados e segurança entre microserviços.
+A integração principal ocorre com o **IntelliJ IDEA** (e opcionalmente VS Code) através do plugin **GitHub Copilot Chat**, utilizando o padrão *Model Context Protocol* (MCP). A solução combina **duas abordagens complementares**: busca semântica em linguagem natural (RAG Vetorial) e navegação estrutural determinística (Serena MCP via LSP). Isso permite que o assistente de inteligência artificial realize análises profundas em todo o diretório de trabalho (`~/workspace`), auxiliando engenheiros de software especialistas na compreensão de arquiteturas complexas, mapeamento de dependências, análise de contratos de dados e segurança entre microserviços.
 
 ## Arquitetura e Componentes da Solução
 
@@ -13,8 +13,9 @@ A arquitetura baseia-se na composição de ferramentas de código aberto e leves
 | Componente | Função | Justificativa |
 | :--- | :--- | :--- |
 | **Ollama** | Motor local para modelos de linguagem e *embeddings* (ex: `nomic-embed-text`). | Permite instalação em nível de usuário no Windows (sem admin) e gera representações vetoriais do código localmente. |
-| **mcp-vector-search** | Servidor MCP em Python que realiza a análise da *Abstract Syntax Tree* (AST) e a indexação do código. | Integra-se nativamente ao protocolo MCP suportado pelo GitHub Copilot, fornecendo *tools* avançadas de busca semântica. |
-| **LanceDB** | Banco de dados vetorial embutido (*serverless*). | Armazena os *embeddings* em disco de forma eficiente, sem a necessidade de instanciar processos em *background* ou utilizar o Docker. |
+| **mcp-vector-search** | Servidor MCP em Python que realiza a análise da *Abstract Syntax Tree* (AST) e a indexação do código. | Fornece *tools* de busca semântica vetorial baseada em linguagem natural. |
+| **LanceDB** | Banco de dados vetorial embutido (*serverless*). | Armazena os *embeddings* em disco de forma eficiente, sem utilizar o Docker. |
+| **Serena MCP** | Servidor MCP patrocinado pela Microsoft que utiliza o *Language Server Protocol* (LSP). | Fornece navegação determinística no código (find_symbol, find_references), complementando a busca vetorial. Instala-se via `uv` sem privilégios de administrador. |
 | **Custom Agents** | Perfis especializados (`.github/agents/`) que direcionam o comportamento do Copilot. | Aplicam o princípio de responsabilidade única, criando "personas" (ex: Tech Lead) focadas em tarefas específicas. |
 | **Prompt Files** | Arquivos de template (`.github/prompts/`) com instruções detalhadas para o Copilot. | Padronizam e facilitam a execução de tarefas recorrentes, como análise arquitetural e geração de diagramas C4. |
 
@@ -50,9 +51,10 @@ O processo de instalação foi automatizado por meio de scripts PowerShell, proj
 
 ```powershell
 .\scripts\setup.ps1
+.\scripts\setup-serena.ps1
 ```
 
-O script irá criar um ambiente virtual Python, instalar as dependências necessárias (`mcp-vector-search` e `lancedb`), baixar o modelo de *embedding* no Ollama e gerar o arquivo `mcp.json` na pasta de configuração do IntelliJ (`~/.config/github-copilot/intellij/`).
+Os scripts irão configurar o ambiente virtual Python, instalar o `mcp-vector-search`, baixar o modelo de *embedding* no Ollama, instalar o **Serena MCP** via `uv` (gerenciador de pacotes) e configurar o arquivo `mcp.json` na pasta de configuração do IntelliJ (`~/.config/github-copilot/intellij/`).
 
 *Nota: Existe também um script de setup alternativo (`setup-alternative-node.ps1`) baseado em Node.js/Bun, caso prefira não utilizar o Ollama.*
 
