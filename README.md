@@ -54,6 +54,11 @@ O processo de instalação foi automatizado por meio de scripts PowerShell, proj
 .\scripts\setup-serena.ps1
 ```
 
+> **Atenção para usuários corporativos:** Se a sua rede utiliza um proxy com inspeção SSL/TLS, o script `setup.ps1` pode falhar no download do modelo com erro de `SHA256 digest`. Neste caso, utilize o script de contorno:
+> ```powershell
+> .\scripts\setup-proxy-workaround.ps1
+> ```
+
 Os scripts irão configurar o ambiente virtual Python, instalar o `mcp-vector-search`, baixar o modelo de *embedding* no Ollama, instalar o **Serena MCP** via `uv` (gerenciador de pacotes) e configurar o arquivo `mcp.json` na pasta de configuração do IntelliJ (`~/.config/github-copilot/intellij/`).
 
 *Nota: Existe também um script de setup alternativo (`setup-alternative-node.ps1`) baseado em Node.js/Bun, caso prefira não utilizar o Ollama.*

@@ -48,7 +48,9 @@ try {
     if ($hasEmbed) {
         Write-Host " OK (modelo encontrado)" -ForegroundColor Green
     } else {
-        Write-Host " AVISO (modelo nao baixado, execute: ollama pull nomic-embed-text)" -ForegroundColor Yellow
+        Write-Host " AVISO (modelo nao baixado)" -ForegroundColor Yellow
+        Write-Host "         Se estiver em rede com proxy, execute: .\scripts\setup-proxy-workaround.ps1" -ForegroundColor Yellow
+        Write-Host "         Caso contrario: ollama pull nomic-embed-text" -ForegroundColor Yellow
         $AllOk = $false
     }
 } catch {
