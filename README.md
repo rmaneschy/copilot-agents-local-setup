@@ -19,7 +19,7 @@ A arquitetura baseia-se na composição de ferramentas de código aberto e leves
 | **Custom Agents** | Perfis especializados (`.github/agents/`) que direcionam o comportamento do Copilot. | Aplicam o princípio de responsabilidade única, criando "personas" (ex: Tech Lead) focadas em tarefas específicas. |
 | **Prompt Files** | Arquivos de template (`.github/prompts/`) com instruções detalhadas para o Copilot. | Padronizam e facilitam a execução de tarefas recorrentes, como análise arquitetural e geração de diagramas C4. |
 
-Para um aprofundamento técnico, consulte o documento de [Arquitetura da Solução](docs/architecture.md), a nossa [Análise Comparativa com Alternativas de Mercado](docs/comparativo-alternativas.md) (como Sourcebot, Continue.dev e Greptile) e o documento conceitual [Agent Harness: A Engenharia por Trás da Autonomia](docs/concepts/agent-harness.md).
+Para um aprofundamento técnico, consulte o documento de [Arquitetura da Solução](docs/architecture.md), a nossa [Análise Comparativa com Alternativas de Mercado](docs/comparativo-alternativas.md) (como Sourcebot, Continue.dev e Greptile), o documento conceitual [Agent Harness: A Engenharia por Trás da Autonomia](docs/concepts/agent-harness.md) e o guia sobre [Spec-Driven Development: Especificações como Código na Era dos Agentes Autônomos](docs/concepts/spec-driven-development.md).
 
 ## Estrutura do Repositório
 
