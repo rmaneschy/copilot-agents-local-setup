@@ -50,6 +50,9 @@ Para um aprofundamento técnico, consulte o documento de [Arquitetura da Soluç�
 scripts/                                 # Automação de Setup (PowerShell)
 ├── setup.ps1                            # Setup RAG Vetorial (Ollama + LanceDB)
 ├── setup-serena.ps1                     # Setup Serena MCP (uv + LSP)
+├── setup-n8n.ps1                        # Setup n8n (orquestrador visual de agentes)
+├── setup-mcp-inspector.ps1              # Executa MCP Inspector (debug visual de tools)
+├── inspect-mcp.ps1                      # Verificação rápida de servidores MCP
 ├── setup-proxy-workaround.ps1           # Contorno para proxy corporativo com SSL
 ├── setup-alternative-node.ps1           # Setup alternativo via Node.js/Bun
 ├── index-workspace.ps1                  # Indexação do workspace para RAG
@@ -140,6 +143,54 @@ Você pode fazer perguntas direcionadas, como:
 - "Quais microserviços gravam na base de pedidos?"
 - "Quais serviços dependem deste contrato OpenAPI?"
 - "Onde a autenticação é validada e quais serviços ignoram autorização?"
+
+---
+
+## Ferramentas Visuais (MCP Inspector e n8n)
+
+Além do monitoramento via proxy, o projeto oferece duas ferramentas visuais complementares para teste, debug e orquestração de agentes.
+
+### MCP Inspector (Debug Visual de Servidores)
+
+O [MCP Inspector](https://github.com/modelcontextprotocol/inspector) é a ferramenta oficial do Model Context Protocol para testar e depurar servidores MCP. Ele fornece uma interface web interativa onde é possível invocar *tools*, consultar *resources* e testar *prompts* expostos pelos servidores locais.
+
+```powershell
+# Inspecionar o mcp-vector-search (padrão)
+.\scripts\setup-mcp-inspector.ps1
+
+# Inspecionar o Serena MCP
+.\scripts\setup-mcp-inspector.ps1 -Server serena
+
+# Inspecionar um servidor customizado
+.\scripts\setup-mcp-inspector.ps1 -Server custom -CustomCommand "node C:\meu-server\index.js"
+```
+
+A interface estará disponível em `http://localhost:6274`. Não requer instalação global; utiliza `npx` diretamente.
+
+### n8n (Orquestrador Visual de Agentes)
+
+O [n8n](https://n8n.io/) é uma plataforma *fair-code* de automação de workflows com suporte nativo ao MCP. Ele permite desenhar fluxos multi-agentes em um canvas visual, conectando LLMs locais (Ollama), servidores MCP e integrações externas (Jira, GitHub, Slack).
+
+```powershell
+# Instalar o n8n localmente (primeira vez)
+.\scripts\setup-n8n.ps1
+
+# Iniciar o n8n (uso diário)
+.\scripts\setup-n8n.ps1 -Start
+
+# Remover o n8n
+.\scripts\setup-n8n.ps1 -Uninstall
+```
+
+A interface estará disponível em `http://localhost:5678`. Para conectar os servidores MCP locais, utilize o nó **MCP Client Tool** no canvas do n8n.
+
+### Verificação Rápida de Servidores MCP
+
+Para verificar rapidamente quais servidores MCP estão disponíveis e seus binários:
+
+```powershell
+.\scripts\inspect-mcp.ps1
+```
 
 ---
 
