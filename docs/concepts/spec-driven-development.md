@@ -257,6 +257,205 @@ O agente Backend Developer executa cada task sequencialmente, usando Serena MCP 
 
 ---
 
+## Exemplo Prático: SDD no Frontend (React + TypeScript)
+
+Considere o cenário: "Implementar a página de gestão de pedidos com filtros avançados, tabela paginável e ações em lote".
+
+Este exemplo demonstra como o SDD se aplica ao desenvolvimento frontend, onde a complexidade não está na infraestrutura, mas na **composição de estados, interações do usuário e contratos de API**.
+
+### Passo 1: Specify (Feature Spec)
+
+```markdown
+# Feature: Página de Gestão de Pedidos
+
+## Outcome
+O usuário com perfil ADMIN ou OPERATOR visualiza uma tabela paginável de pedidos,
+podendo filtrar por status, período e cliente. O usuário pode selecionar múltiplos
+pedidos e executar ações em lote (cancelar, reprocessar, exportar CSV).
+A página mantém o estado dos filtros na URL (deep-linkable).
+
+## Scope
+- IN: Tabela de pedidos, filtros (status, período, cliente), paginação server-side,
+  seleção múltipla, ações em lote, persistência de filtros na URL
+- OUT: Detalhes do pedido (página separada), edição inline, notificações push
+
+## Constraints
+- React 18+ com TypeScript strict mode
+- TanStack Query v5 para data fetching e cache
+- TanStack Table v8 para renderização da tabela
+- React Hook Form + Zod para validação dos filtros
+- Design System interno (componentes de `@company/ui`)
+- API REST existente: GET /api/v1/orders (paginável, filterável)
+- API REST existente: POST /api/v1/orders/batch-action
+- Responsivo: desktop (tabela completa) e mobile (cards empilhados)
+- Acessibilidade: WCAG 2.1 AA (navegação por teclado, aria-labels)
+
+## Prior Decisions
+- Roteamento via React Router v6 (já configurado)
+- Autenticação via hook `useAuth()` que retorna `{ user, roles, token }`
+- Componentes base: `<DataTable>`, `<FilterPanel>`, `<PageHeader>` do Design System
+- Estado global via Zustand (apenas para preferências do usuário)
+- Testes com Vitest + Testing Library + MSW para mocks de API
+
+## Task Breakdown
+1. Tipagens TypeScript (DTOs, enums de status, tipos de filtro)
+2. Hook de API `useOrders()` com TanStack Query
+3. Hook de filtros `useOrderFilters()` com sincronização de URL
+4. Componente `<OrderFilters>` com React Hook Form + Zod
+5. Componente `<OrdersTable>` com TanStack Table + seleção
+6. Componente `<BatchActions>` com confirmação e feedback
+7. Página `<OrdersPage>` compondo os componentes
+8. Testes unitários e de integração
+
+## Verification Criteria
+- [ ] Tabela renderiza pedidos com paginação server-side funcional
+- [ ] Filtros persistem na URL e sobrevivem a refresh do navegador
+- [ ] Seleção múltipla funciona com Shift+Click e checkbox "selecionar todos"
+- [ ] Ações em lote exibem confirmação antes de executar
+- [ ] Loading states e empty states renderizam corretamente
+- [ ] Layout responsivo: tabela no desktop, cards no mobile
+- [ ] Navegação por teclado funcional em toda a página
+- [ ] Testes cobrem: renderização, filtragem, paginação, ações em lote, erro de API
+```
+
+### Passo 2: Plan (Decisões Técnicas)
+
+O agente Tech Lead analisa a spec, usa Serena MCP para verificar os componentes existentes do Design System, e gera o plano técnico:
+
+```markdown
+# Plan: Página de Gestão de Pedidos
+
+## Stack Confirmada (via Serena: get_symbol_overview)
+- @company/ui: DataTable (suporta seleção via prop `selectable`),
+  FilterPanel (layout de grid responsivo), PageHeader (com slot para actions)
+- TanStack Query: useQuery + keepPreviousData para UX fluida durante paginação
+- TanStack Table: createColumnHelper + flexRender para tipagem forte das colunas
+- React Router: useSearchParams para sincronização bidirecional filtros ↔ URL
+
+## Arquitetura de Componentes
+
+OrdersPage (route: /admin/orders)
+├── PageHeader (title + BatchActions slot)
+├── OrderFilters
+│   ├── StatusSelect (multi-select com chips)
+│   ├── DateRangePicker (período)
+│   └── CustomerSearch (autocomplete debounced)
+├── OrdersTable
+│   ├── SelectionColumn (checkbox)
+│   ├── OrderColumns (id, cliente, valor, status, data)
+│   └── Pagination (server-side)
+└── BatchActions
+    ├── CancelButton (com confirmação)
+    ├── ReprocessButton (com confirmação)
+    └── ExportCsvButton (download direto)
+
+## Estratégia de Estado
+- Server state: TanStack Query (cache, refetch, optimistic updates)
+- URL state: useSearchParams (filtros, página atual)
+- Local state: useState (seleção de linhas, modal de confirmação)
+- Nenhum estado global necessário para esta feature
+
+## Contrato de API (já existente)
+GET /api/v1/orders?status=PENDING,PAID&from=2026-01-01&to=2026-06-01
+                   &customer=acme&page=0&size=20&sort=createdAt,desc
+
+Response: { content: Order[], totalElements, totalPages, number, size }
+
+POST /api/v1/orders/batch-action
+Body: { orderIds: string[], action: "CANCEL" | "REPROCESS" | "EXPORT" }
+Response: { processed: number, failed: number, errors: BatchError[] }
+```
+
+### Passo 3: Tasks (Decomposição Atômica)
+
+Cada task é projetada para ser um commit isolado, revisável independentemente:
+
+```markdown
+- [x] Task 1: Tipagens e contratos
+  - Criar `src/features/orders/types.ts` com Order, OrderStatus, OrderFilters,
+    BatchAction, PaginatedResponse<T>
+  - Criar `src/features/orders/schemas.ts` com Zod schemas para validação
+  - Commit: "feat(orders): define tipagens e schemas de validação"
+
+- [x] Task 2: Hook de API
+  - Criar `src/features/orders/hooks/useOrders.ts`
+  - Implementar useQuery com queryKey derivada dos filtros
+  - Implementar useMutation para batch-action com invalidateQueries
+  - Teste: `useOrders.test.ts` com MSW interceptando GET /api/v1/orders
+  - Commit: "feat(orders): implementa hook useOrders com TanStack Query"
+
+- [x] Task 3: Hook de filtros com sincronização de URL
+  - Criar `src/features/orders/hooks/useOrderFilters.ts`
+  - Sincronizar useSearchParams ↔ estado do formulário (bidirecional)
+  - Debounce de 300ms no campo de busca de cliente
+  - Teste: `useOrderFilters.test.ts` verificando persistência na URL
+  - Commit: "feat(orders): implementa hook useOrderFilters com sync de URL"
+
+- [x] Task 4: Componente OrderFilters
+  - Criar `src/features/orders/components/OrderFilters.tsx`
+  - Usar React Hook Form + resolver Zod
+  - Integrar com componentes do Design System (FilterPanel, StatusSelect)
+  - Teste: `OrderFilters.test.tsx` verificando submit e reset
+  - Commit: "feat(orders): implementa componente OrderFilters"
+
+- [x] Task 5: Componente OrdersTable
+  - Criar `src/features/orders/components/OrdersTable.tsx`
+  - Definir colunas com createColumnHelper<Order>()
+  - Implementar seleção com onRowSelectionChange
+  - Implementar layout responsivo (tabela → cards via media query)
+  - Teste: `OrdersTable.test.tsx` verificando render, seleção, paginação
+  - Commit: "feat(orders): implementa componente OrdersTable com seleção"
+
+- [x] Task 6: Componente BatchActions
+  - Criar `src/features/orders/components/BatchActions.tsx`
+  - Modal de confirmação com contagem de itens selecionados
+  - Feedback de sucesso/erro após execução (toast)
+  - Desabilitar botões quando nenhum item selecionado
+  - Teste: `BatchActions.test.tsx` verificando confirmação e chamada de API
+  - Commit: "feat(orders): implementa componente BatchActions"
+
+- [x] Task 7: Composição da página
+  - Criar `src/features/orders/pages/OrdersPage.tsx`
+  - Compor todos os componentes com layout responsivo
+  - Registrar rota em `src/routes.tsx`
+  - Proteger com guard de autorização (roles: ADMIN, OPERATOR)
+  - Teste: `OrdersPage.test.tsx` (integração com todos os componentes)
+  - Commit: "feat(orders): implementa OrdersPage e registra rota"
+
+- [x] Task 8: Testes E2E e acessibilidade
+  - Criar `tests/e2e/orders-page.spec.ts` com Playwright
+  - Cenários: filtrar, paginar, selecionar, executar ação em lote
+  - Validar acessibilidade com `axe-playwright`
+  - Commit: "test(orders): adiciona testes E2E e validação de acessibilidade"
+```
+
+### Passo 4: Implement (Execução pelo Agente)
+
+O agente Frontend Developer executa cada task seguindo a estratégia de ferramentas definida:
+
+1. **Antes de cada task**, usa `serena/find_symbol` para localizar componentes do Design System e verificar suas props/interfaces.
+2. **Durante a implementação**, segue os padrões existentes no repositório (convenções de import, estrutura de hooks, estilo de testes).
+3. **Após cada task**, apresenta o código para aprovação humana antes de commitar.
+4. **Na task final**, executa `pnpm test` e `pnpm lint` para garantir que nada foi quebrado.
+
+O resultado é uma feature completa, testada, acessível e revisável em 8 commits isolados — cada um mapeado diretamente para um requisito da spec original.
+
+### Anatomia da Decisão: Por Que Esta Ordem?
+
+A decomposição segue o princípio **bottom-up** (das camadas mais estáveis para as mais voláteis):
+
+| Ordem | Camada | Justificativa |
+| :--- | :--- | :--- |
+| 1 | Tipagens | Contrato que todas as outras camadas consomem; mudar aqui quebra tudo |
+| 2-3 | Hooks (dados) | Lógica de negócio e estado, independente de UI |
+| 4-6 | Componentes (UI) | Consomem os hooks; podem ser testados isoladamente |
+| 7 | Página (composição) | Apenas cola os componentes; menor lógica própria |
+| 8 | E2E (validação) | Verifica o sistema integrado contra a spec |
+
+Esta ordem garante que cada task pode ser testada isoladamente sem depender de tasks posteriores — um princípio fundamental para agentes autônomos que precisam de feedback imediato após cada ação.
+
+---
+
 ## SDD no Dia a Dia: Dicas Práticas
 
 A Red Hat propõe uma abordagem pragmática para adoção gradual [6]. Em vez de reescrever todo o processo de desenvolvimento, comece com estas práticas:
