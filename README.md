@@ -103,12 +103,37 @@ Você pode fazer perguntas direcionadas, como:
 - "Quais serviços dependem deste contrato OpenAPI?"
 - "Onde a autenticação é validada e quais serviços ignoram autorização?"
 
-## Monitoramento
+## Monitoramento e Dashboard
 
-Para verificar a saúde de todos os componentes da solução (Ollama, Python, servidor MCP e configurações), execute o script de verificação:
+O projeto inclui ferramentas completas para monitorar a saúde do sistema e o desempenho dos agentes.
+
+### Verificação de Saúde (Health Check)
+
+Para verificar se todos os componentes (Ollama, Python, Serena, RAG) estão rodando corretamente:
 
 ```powershell
 .\scripts\health-check.ps1
+```
+
+### Dashboard de Desempenho (MCP Proxy Logger)
+
+Você pode habilitar o monitoramento avançado para ver **exatamente quais ferramentas os agentes estão usando**, quanto tempo demoram e se há gargalos. O sistema intercepta as chamadas JSON-RPC de forma transparente e gera um dashboard visual em HTML.
+
+**1. Habilitar o monitoramento:**
+```powershell
+.\scripts\toggle-monitoring.ps1 -Enable
+```
+*(Reinicie o IntelliJ após habilitar)*
+
+**2. Gerar e visualizar o dashboard:**
+```powershell
+.\scripts\generate-dashboard.ps1
+```
+*(Isso abrirá automaticamente um relatório HTML no seu navegador)*
+
+**3. Desabilitar o monitoramento:**
+```powershell
+.\scripts\toggle-monitoring.ps1 -Disable
 ```
 
 ## Contribuições e Padrões
