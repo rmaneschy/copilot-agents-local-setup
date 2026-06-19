@@ -19,7 +19,7 @@ A arquitetura baseia-se na composição de ferramentas de código aberto e leves
 | **Custom Agents** | Perfis especializados (`.github/agents/`) que direcionam o comportamento do Copilot. | Aplicam o princípio de responsabilidade única, criando "personas" (ex: Tech Lead) focadas em tarefas específicas. |
 | **Prompt Files** | Arquivos de template (`.github/prompts/`) com instruções detalhadas para o Copilot. | Padronizam e facilitam a execução de tarefas recorrentes, como análise arquitetural e geração de diagramas C4. |
 
-Para um aprofundamento técnico, consulte o documento de [Arquitetura da Solução](docs/architecture.md), a nossa [Análise Comparativa com Alternativas de Mercado](docs/comparativo-alternativas.md) (como Sourcebot, Continue.dev e Greptile), o documento conceitual [Agent Harness: A Engenharia por Trás da Autonomia](docs/concepts/agent-harness.md), o guia sobre [Spec-Driven Development: Especificações como Código na Era dos Agentes Autônomos](docs/concepts/spec-driven-development.md) a [Análise Comparativa de SDD entre Plataformas (Frontend, Backend e Mobile)](docs/concepts/sdd-comparativo-plataformas.md) o guia de [Spec-Driven Development com Compozy](docs/concepts/sdd-compozy.md) o [Comparativo de Ferramentas de Orquestração de Agentes de IA](docs/concepts/comparativo-orquestradores-agentes.md) e o [Guia de Integração: Compozy + RAG + Serena](docs/examples/guia-integracao-compozy.md).
+Para um aprofundamento técnico, consulte o documento de [Arquitetura da Solução](docs/architecture.md), a nossa [Análise Comparativa com Alternativas de Mercado](docs/comparativo-alternativas.md) (como Sourcebot, Continue.dev e Greptile), o documento conceitual [Agent Harness: A Engenharia por Trás da Autonomia](docs/concepts/agent-harness.md), o guia sobre [Spec-Driven Development: Especificações como Código na Era dos Agentes Autônomos](docs/concepts/spec-driven-development.md) a [Análise Comparativa de SDD entre Plataformas (Frontend, Backend e Mobile)](docs/concepts/sdd-comparativo-plataformas.md) o guia de [Spec-Driven Development com Compozy](docs/concepts/sdd-compozy.md) o [Comparativo de Ferramentas de Orquestração de Agentes de IA](docs/concepts/comparativo-orquestradores-agentes.md), o [Guia de Integração: Compozy + RAG + Serena](docs/examples/guia-integracao-compozy.md) e o [Guia de Otimização de Desempenho](docs/examples/guia-otimizacao-desempenho.md).
 
 ## Estrutura do Repositório
 
@@ -135,6 +135,16 @@ Você pode habilitar o monitoramento avançado para ver **exatamente quais ferra
 ```powershell
 .\scripts\toggle-monitoring.ps1 -Disable
 ```
+
+### Otimização de Desempenho
+
+Para maximizar a velocidade de resposta dos agentes e reduzir consumo de recursos, execute o script de otimização:
+
+```powershell
+.\scripts\optimize-environment.ps1 -All
+```
+
+Este script configura o Ollama keep-alive (modelo permanente em memória), cria índices vetoriais e escalares no LanceDB (até 46x menos comparações), e executa compactação de fragmentos. Para detalhes completos sobre técnicas de otimização por camada (Ollama, LanceDB, Serena, Compozy e LLM), consulte o [Guia de Otimização de Desempenho](docs/examples/guia-otimizacao-desempenho.md).
 
 ## Contribuições e Padrões
 
