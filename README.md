@@ -2,9 +2,13 @@
 
 ## Visão Geral do Projeto
 
-O projeto **Copilot Agents Local Setup** fornece uma arquitetura e um conjunto de ferramentas para implementar um sistema de *Retrieval-Augmented Generation* (RAG) 100% local, voltado para a análise avançada de código-fonte. A solução foi concebida para operar em ambientes de desenvolvimento corporativos restritos, especificamente em máquinas com sistema operacional Windows 11, onde o usuário não possui privilégios de administrador e não há disponibilidade de contêineres Docker.
+O projeto **Copilot Agents Local Setup** fornece os scripts, configurações e ferramentas necessários para provisionar um sistema de *Retrieval-Augmented Generation* (RAG) 100% local, voltado para a análise avançada de código-fonte. A solução foi concebida para operar em ambientes de desenvolvimento corporativos restritos, especificamente em máquinas com sistema operacional Windows 11, onde o usuário não possui privilégios de administrador e não há disponibilidade de contêineres Docker.
 
-A integração principal ocorre com o **IntelliJ IDEA** (e opcionalmente VS Code) através do plugin **GitHub Copilot Chat**, utilizando o padrão *Model Context Protocol* (MCP). A solução combina **duas abordagens complementares**: busca semântica em linguagem natural (RAG Vetorial) e navegação estrutural determinística (Serena MCP via LSP). Isso permite que o assistente de inteligência artificial realize análises profundas em todo o diretório de trabalho (`~/workspace`), auxiliando engenheiros de software especialistas na compreensão de arquiteturas complexas, mapeamento de dependências, análise de contratos de dados e segurança entre microserviços.
+A integração principal ocorre com o **IntelliJ IDEA** (e opcionalmente VS Code) através do plugin **GitHub Copilot Chat**, utilizando o padrão *Model Context Protocol* (MCP). A solução combina **duas abordagens complementares**: busca semântica em linguagem natural (RAG Vetorial) e navegação estrutural determinística (Serena MCP via LSP).
+
+> **Nota:** Os documentos conceituais sobre agentes, Spec-Driven Development, orquestradores e melhores práticas estão no repositório irmão [copilot-agents-setup](https://github.com/rmaneschy/copilot-agents-setup). Este repositório foca exclusivamente na **infraestrutura local** (instalação, configuração e operação).
+
+---
 
 ## Arquitetura e Componentes da Solução
 
@@ -16,21 +20,53 @@ A arquitetura baseia-se na composição de ferramentas de código aberto e leves
 | **mcp-vector-search** | Servidor MCP em Python que realiza a análise da *Abstract Syntax Tree* (AST) e a indexação do código. | Fornece *tools* de busca semântica vetorial baseada em linguagem natural. |
 | **LanceDB** | Banco de dados vetorial embutido (*serverless*). | Armazena os *embeddings* em disco de forma eficiente, sem utilizar o Docker. |
 | **Serena MCP** | Servidor MCP patrocinado pela Microsoft que utiliza o *Language Server Protocol* (LSP). | Fornece navegação determinística no código (find_symbol, find_references), complementando a busca vetorial. Instala-se via `uv` sem privilégios de administrador. |
-| **Custom Agents** | Perfis especializados (`.github/agents/`) que direcionam o comportamento do Copilot. | Aplicam o princípio de responsabilidade única, criando "personas" (ex: Tech Lead) focadas em tarefas específicas. |
-| **Prompt Files** | Arquivos de template (`.github/prompts/`) com instruções detalhadas para o Copilot. | Padronizam e facilitam a execução de tarefas recorrentes, como análise arquitetural e geração de diagramas C4. |
 
-Para um aprofundamento técnico, consulte o documento de [Arquitetura da Solução](docs/architecture.md), a nossa [Análise Comparativa com Alternativas de Mercado](docs/comparativo-alternativas.md) (como Sourcebot, Continue.dev e Greptile), o documento conceitual [Agent Harness: A Engenharia por Trás da Autonomia](docs/concepts/agent-harness.md), o guia sobre [Spec-Driven Development: Especificações como Código na Era dos Agentes Autônomos](docs/concepts/spec-driven-development.md) a [Análise Comparativa de SDD entre Plataformas (Frontend, Backend e Mobile)](docs/concepts/sdd-comparativo-plataformas.md) o guia de [Spec-Driven Development com Compozy](docs/concepts/sdd-compozy.md) o [Comparativo de Ferramentas de Orquestração de Agentes de IA](docs/concepts/comparativo-orquestradores-agentes.md), as [Melhores Práticas para Agentes Agnósticos a Plataformas](docs/concepts/agentes-agnosticos-plataformas.md), o documento conceitual sobre o [Model Context Protocol (MCP)](docs/concepts/model-context-protocol-mcp.md), o [Guia de Integração: Compozy + RAG + Serena](docs/examples/guia-integracao-compozy.md) e o [Guia de Otimização de Desempenho](docs/examples/guia-otimizacao-desempenho.md).
+Para um aprofundamento técnico, consulte o documento de [Arquitetura da Solução](docs/architecture.md) e a [Análise Comparativa com Alternativas de Mercado](docs/comparativo-alternativas.md) (como Sourcebot, Continue.dev e Greptile).
+
+---
 
 ## Estrutura do Repositório
 
-O repositório está organizado seguindo os princípios de responsabilidade única e separação de conceitos:
+```text
+.github/
+├── agents/                              # Agentes especializados para uso com RAG + Serena
+│   ├── techlead-architecture.md         #   Análise arquitetural de microserviços
+│   ├── techlead-c4-diagram.md           #   Geração de diagramas C4 Container
+│   ├── techlead-communication.md        #   Mapeamento de comunicação entre serviços
+│   └── techlead-data-contracts.md       #   Contratos de dados, auth e dependências
+├── prompts/                             # Prompts prontos para uso no Copilot Chat
+│   ├── analyze-service.prompt.md        #   Análise de fluxo de ponta a ponta
+│   ├── generate-c4-diagram.prompt.md    #   Gerar diagrama C4 com evidências
+│   ├── map-communication.prompt.md      #   Mapear dependências entre serviços
+│   ├── query-authentication.prompt.md   #   Consultar autenticação/autorização
+│   ├── query-database-access.prompt.md  #   Consultar acessos a banco de dados
+│   └── query-openapi-dependencies.prompt.md # Consultar dependências de contratos
+└── copilot-instructions.md              # Instruções de contexto global
 
-- `.github/agents/`: Definições dos agentes customizados para o Copilot (`TechLead-Architecture`, `TechLead-Communication`, `TechLead-DataContracts`, `TechLead-C4Diagram`).
-- `.github/prompts/`: Arquivos de *prompt* prontos para uso no Copilot Chat.
-- `.github/copilot-instructions.md`: Instruções de contexto global para o Copilot neste projeto.
-- `.vscode/`: Configuração alternativa de MCP para usuários do Visual Studio Code.
-- `docs/`: Documentação técnica, decisões arquiteturais e guias.
-- `scripts/`: Scripts de automação (PowerShell) para configuração, indexação e monitoramento de saúde do ambiente.
+.vscode/
+├── mcp.json                             # Configuração MCP padrão (RAG + Serena)
+└── mcp-with-monitoring.json             # Configuração MCP com proxy de monitoramento
+
+scripts/                                 # Automação de Setup (PowerShell)
+├── setup.ps1                            # Setup RAG Vetorial (Ollama + LanceDB)
+├── setup-serena.ps1                     # Setup Serena MCP (uv + LSP)
+├── setup-proxy-workaround.ps1           # Contorno para proxy corporativo com SSL
+├── setup-alternative-node.ps1           # Setup alternativo via Node.js/Bun
+├── index-workspace.ps1                  # Indexação do workspace para RAG
+├── health-check.ps1                     # Verificação de saúde dos componentes
+├── optimize-environment.ps1             # Otimização de desempenho (keep-alive, índices)
+├── toggle-monitoring.ps1                # Habilitar/desabilitar monitoramento MCP
+└── generate-dashboard.ps1               # Gerar dashboard HTML de desempenho
+
+monitoring/
+└── mcp-proxy-logger.py                  # Proxy transparente para logging JSON-RPC
+
+docs/                                    # Documentação técnica da infraestrutura
+├── architecture.md                      # Arquitetura detalhada da solução
+└── comparativo-alternativas.md          # Comparação com Sourcebot, Continue.dev, Greptile
+```
+
+---
 
 ## Instalação e Configuração
 
@@ -71,6 +107,8 @@ Após a configuração, é necessário indexar o código-fonte do seu diretório
 .\scripts\index-workspace.ps1 -Path "C:\Users\SEU_USUARIO\workspace"
 ```
 
+---
+
 ## Utilização e Prompts Especializados
 
 Uma vez configurado, o servidor MCP local expõe ferramentas de busca semântica para o GitHub Copilot. Você pode invocar os agentes e *prompts* diretamente no chat do IntelliJ para realizar tarefas complexas.
@@ -88,7 +126,7 @@ Para analisar o fluxo de ponta a ponta de um microserviço, utilize o agente de 
 Para descobrir relações de dependência no seu *workspace*:
 
 > "Na raiz C:\Users\SEU_USUARIO\workspace, descubra relações entre microserviços. Procure: URLs internas, nomes de serviços em variáveis de ambiente, clients Feign, WebClient, RestTemplate, Axios, fetch, gRPC, protobuf, tópicos Kafka/RabbitMQ/SQS/PubSub, consumers/producers, OpenAPI clients, Helm values, Kubernetes Service/Ingress, docker-compose service names.
-> Gere uma matriz: origem | destino | protocolo | evidência | criticidade | observações. Diferencie dependência confirmada de dependência provável."
+> Gere uma matriz: origem | destino | protocolo | evidência | criticidade | observações."
 
 ### 3. Geração de Diagramas C4
 
@@ -102,6 +140,8 @@ Você pode fazer perguntas direcionadas, como:
 - "Quais microserviços gravam na base de pedidos?"
 - "Quais serviços dependem deste contrato OpenAPI?"
 - "Onde a autenticação é validada e quais serviços ignoram autorização?"
+
+---
 
 ## Monitoramento e Dashboard
 
@@ -129,7 +169,6 @@ Você pode habilitar o monitoramento avançado para ver **exatamente quais ferra
 ```powershell
 .\scripts\generate-dashboard.ps1
 ```
-*(Isso abrirá automaticamente um relatório HTML no seu navegador)*
 
 **3. Desabilitar o monitoramento:**
 ```powershell
@@ -144,7 +183,18 @@ Para maximizar a velocidade de resposta dos agentes e reduzir consumo de recurso
 .\scripts\optimize-environment.ps1 -All
 ```
 
-Este script configura o Ollama keep-alive (modelo permanente em memória), cria índices vetoriais e escalares no LanceDB (até 46x menos comparações), e executa compactação de fragmentos. Para detalhes completos sobre técnicas de otimização por camada (Ollama, LanceDB, Serena, Compozy e LLM), consulte o [Guia de Otimização de Desempenho](docs/examples/guia-otimizacao-desempenho.md).
+Este script configura o Ollama keep-alive (modelo permanente em memória), cria índices vetoriais e escalares no LanceDB (até 46x menos comparações) e executa compactação de fragmentos.
+
+---
+
+## Repositório Irmão
+
+| Repositório | Propósito |
+| :--- | :--- |
+| [copilot-agents-setup](https://github.com/rmaneschy/copilot-agents-setup) | Estrutura de agentes, skills, instruções, prompts e documentação conceitual (SDD, MCP, Orquestradores, Agentes Agnósticos). |
+| **Este repositório** | Scripts, configs e ferramentas para instalar e operar a infraestrutura local (Ollama, RAG, Serena, LanceDB). |
+
+---
 
 ## Contribuições e Padrões
 
