@@ -6,7 +6,7 @@ O projeto **Copilot Agents Local Setup** fornece os scripts, configurações e f
 
 A integração principal ocorre com o **IntelliJ IDEA** (e opcionalmente VS Code) através do plugin **GitHub Copilot Chat**, utilizando o padrão *Model Context Protocol* (MCP). A solução combina **duas abordagens complementares**: busca semântica em linguagem natural (RAG Vetorial) e navegação estrutural determinística (Serena MCP via LSP).
 
-> **Nota:** Os documentos conceituais sobre agentes, Spec-Driven Development, orquestradores e melhores práticas estão no repositório irmão [copilot-agents-setup](https://github.com/rmaneschy/copilot-agents-setup). Este repositório foca exclusivamente na **infraestrutura local** (instalação, configuração e operação).
+> **Nota:** Os documentos conceituais sobre agentes, orquestradores e melhores práticas estão no repositório irmão [copilot-agents-setup](https://github.com/rmaneschy/copilot-agents-setup). Este repositório foca na **infraestrutura local** (instalação, configuração e operação), com exceção do [Comparativo de Frameworks SDD](docs/concepts/spec-driven-development-frameworks.md) que orienta a escolha de metodologia para o time.
 
 ---
 
@@ -66,7 +66,9 @@ monitoring/
 
 docs/                                    # Documentação técnica da infraestrutura
 ├── architecture.md                      # Arquitetura detalhada da solução
-└── comparativo-alternativas.md          # Comparação com Sourcebot, Continue.dev, Greptile
+├── comparativo-alternativas.md          # Comparação com Sourcebot, Continue.dev, Greptile
+└── concepts/
+    └── spec-driven-development-frameworks.md  # Comparativo SDD (SpecKit, Superpowers, OpenSpec)
 ```
 
 ---
