@@ -228,11 +228,38 @@ $pythonExe = Join-Path $VenvPath "Scripts\python.exe"
 Write-Host ""
 Write-Host "  [3/5] Instalando mcp-vector-search e dependências..." -ForegroundColor White
 
+# ─────────────────────────────────────────────────────────────────────────────
+# Workaround: Windows Long Paths (MAX_PATH 260 chars)
+# O pacote 'kuzu' (dependência transitiva do LanceDB) possui caminhos de source
+# que excedem 260 caracteres durante a compilação. Ao redirecionar o TMPDIR para
+# um caminho curto dentro do perfil do usuário, evitamos o erro:
+#   "No such file or directory: C:\Users\...\AppData\Local\Temp\pip_install-***\kuzu-source\..."
+# ─────────────────────────────────────────────────────────────────────────────
+$shortTmpDir = Join-Path $env:USERPROFILE "tmp"
+if (-not (Test-Path $shortTmpDir)) {
+    New-Item -ItemType Directory -Path $shortTmpDir -Force | Out-Null
+}
+$originalTmp = $env:TMPDIR
+$originalTemp = $env:TEMP
+$originalTmp2 = $env:TMP
+$env:TMPDIR = $shortTmpDir
+$env:TEMP = $shortTmpDir
+$env:TMP = $shortTmpDir
+Write-Host "    Workaround Long Paths: TEMP redirecionado para $shortTmpDir" -ForegroundColor DarkGray
+
 Write-Host "    Atualizando pip..."
 & $pipExe install --upgrade pip 2>&1 | Out-Null
 
+# Tentar instalar com wheels binários primeiro (evita compilação do kuzu)
 Write-Host "    Instalando pacotes: mcp-vector-search, lancedb, ollama..."
-$installOutput = & $pipExe install mcp-vector-search lancedb ollama 2>&1
+Write-Host "    Tentando instalação com wheels pré-compilados..." -ForegroundColor DarkGray
+$installOutput = & $pipExe install --only-binary=kuzu mcp-vector-search lancedb ollama 2>&1
+
+if ($LASTEXITCODE -ne 0) {
+    # Fallback: tentar sem restrição de binary-only (pode compilar do source)
+    Write-Host "    Wheels binários não disponíveis para kuzu. Tentando compilação do source..." -ForegroundColor Yellow
+    $installOutput = & $pipExe install mcp-vector-search lancedb ollama 2>&1
+}
 
 if ($LASTEXITCODE -ne 0) {
     Write-Host ""
@@ -241,14 +268,26 @@ if ($LASTEXITCODE -ne 0) {
     Write-Host "    $installOutput" -ForegroundColor DarkGray
     Write-Host ""
     Write-Host "    Possíveis causas:" -ForegroundColor Yellow
+    Write-Host "      - Windows Long Paths: mesmo com TEMP curto, o caminho pode exceder 260 chars" -ForegroundColor Yellow
+    Write-Host "        Solução: Habilitar LongPathsEnabled (requer admin pontual):" -ForegroundColor Yellow
+    Write-Host "        reg add HKLM\SYSTEM\CurrentControlSet\Control\FileSystem /v LongPathsEnabled /t REG_DWORD /d 1 /f" -ForegroundColor DarkGray
     Write-Host "      - Proxy corporativo bloqueando PyPI" -ForegroundColor Yellow
-    Write-Host "      - Versão do Python incompatível" -ForegroundColor Yellow
+    Write-Host "        Solução:" -ForegroundColor Yellow
+    Write-Host "        $pipExe install --trusted-host pypi.org --trusted-host pypi.python.org --trusted-host files.pythonhosted.org mcp-vector-search lancedb" -ForegroundColor DarkGray
+    Write-Host "      - Versão do Python incompatível (requer 3.11+)" -ForegroundColor Yellow
     Write-Host ""
-    Write-Host "    Solução para proxy:" -ForegroundColor Yellow
-    Write-Host "      $pipExe install --trusted-host pypi.org --trusted-host pypi.python.org --trusted-host files.pythonhosted.org mcp-vector-search lancedb" -ForegroundColor DarkGray
-    Write-Host ""
+    # Restaurar variáveis de ambiente originais
+    $env:TMPDIR = $originalTmp
+    $env:TEMP = $originalTemp
+    $env:TMP = $originalTmp2
     exit 1
 }
+
+# Restaurar variáveis de ambiente originais
+$env:TMPDIR = $originalTmp
+$env:TEMP = $originalTemp
+$env:TMP = $originalTmp2
+Write-Host "    Workaround Long Paths: TEMP restaurado para o valor original." -ForegroundColor DarkGray
 
 # Verificar instalação
 $mcpVsVersion = & $pythonExe -c "import mcp_vector_search; print(mcp_vector_search.__version__)" 2>&1
