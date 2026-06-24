@@ -125,7 +125,7 @@ function Set-UvCorporateWorkarounds {
 # ═══════════════════════════════════════════════════════════════════════════════
 # Etapa 1: Aplicar workarounds para ambiente corporativo
 # ═══════════════════════════════════════════════════════════════════════════════
-Write-Host "  [1/5] Preparando ambiente (workarounds corporativos)..." -ForegroundColor White
+Write-Host "  [1/6] Preparando ambiente (workarounds corporativos)..." -ForegroundColor White
 
 Set-SafeTempDir
 Set-UvCorporateWorkarounds
@@ -135,7 +135,7 @@ Write-Host "    OK: Ambiente preparado para instalação segura." -ForegroundCol
 # Etapa 2: Verificar/Instalar gerenciador de pacotes (uv ou pipx)
 # ═══════════════════════════════════════════════════════════════════════════════
 Write-Host ""
-Write-Host "  [2/5] Verificando gerenciador de pacotes..." -ForegroundColor White
+Write-Host "  [2/6] Verificando gerenciador de pacotes..." -ForegroundColor White
 
 $useUv = $true
 $installMethod = "uv"
@@ -220,7 +220,7 @@ if (-not $useUv) {
 # Etapa 3: Instalar Serena
 # ═══════════════════════════════════════════════════════════════════════════════
 Write-Host ""
-Write-Host "  [3/5] Instalando Serena MCP (via $installMethod)..." -ForegroundColor White
+Write-Host "  [3/6] Instalando Serena MCP (via $installMethod)..." -ForegroundColor White
 
 $serenaInstalled = $false
 
@@ -365,7 +365,7 @@ if (-not $serenaInstalled) {
 # Etapa 4: Inicializar Serena (language servers)
 # ═══════════════════════════════════════════════════════════════════════════════
 Write-Host ""
-Write-Host "  [4/5] Inicializando Serena (backend: language servers)..." -ForegroundColor White
+Write-Host "  [4/6] Inicializando Serena (backend: language servers)..." -ForegroundColor White
 
 # Atualizar PATH para encontrar o serena recém-instalado
 $possiblePaths = @(
@@ -398,7 +398,7 @@ if ($serenaCmd) {
 # Etapa 5: Configurar MCP no IntelliJ (GitHub Copilot)
 # ═══════════════════════════════════════════════════════════════════════════════
 Write-Host ""
-Write-Host "  [5/5] Configurando MCP para GitHub Copilot no IntelliJ..." -ForegroundColor White
+Write-Host "  [5/6] Configurando MCP para GitHub Copilot no IntelliJ..." -ForegroundColor White
 
 $mcpConfigDir = "$env:USERPROFILE\.config\github-copilot\intellij"
 $mcpConfigFile = Join-Path $mcpConfigDir "mcp.json"
@@ -447,6 +447,142 @@ else {
     $mcpConfig | ConvertTo-Json -Depth 10 | Set-Content $mcpConfigFile -Encoding UTF8
     Write-Host "    OK: mcp.json criado com Serena!" -ForegroundColor Green
 }
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Etapa 6: Gerar serena_config.yml otimizado
+# ═══════════════════════════════════════════════════════════════════════════════
+Write-Host ""
+Write-Host "  [6/6] Gerando configuração global otimizada (~\.serena\serena_config.yml)..." -ForegroundColor White
+
+$serenaGlobalDir = Join-Path $env:USERPROFILE ".serena"
+if (-not (Test-Path $serenaGlobalDir)) {
+    New-Item -ItemType Directory -Path $serenaGlobalDir -Force | Out-Null
+}
+
+$serenaConfigFile = Join-Path $serenaGlobalDir "serena_config.yml"
+
+# Verificar se já existe para não sobrescrever customizações do usuário
+if (Test-Path $serenaConfigFile) {
+    Write-Host "    Arquivo serena_config.yml já existe." -ForegroundColor Gray
+    Write-Host "    Criando backup: serena_config.yml.bak" -ForegroundColor Gray
+    Copy-Item $serenaConfigFile "$serenaConfigFile.bak" -Force
+}
+
+$configYaml = @"
+# ═══════════════════════════════════════════════════════════════════════════════
+# SERENA GLOBAL CONFIG
+# Otimizado para IntelliJ + GitHub Copilot Agent Mode
+# Gerado automaticamente por setup-serena.ps1
+# Documentação: https://oraios.github.io/serena/02-usage/050_configuration.html
+# ═══════════════════════════════════════════════════════════════════════════════
+
+# ─── Backend ─────────────────────────────────────────────────────────────────
+# JetBrains: usa o plugin do IntelliJ como backend (mais preciso, aproveita
+# os índices já construídos pela IDE). Alternativa: LSP (standalone).
+language_backend: JetBrains
+
+# Line ending: 'native' respeita o SO (CRLF no Windows, LF no Linux/Mac)
+line_ending: native
+
+# ─── Dashboard Web ───────────────────────────────────────────────────────────
+# Dashboard para monitorar tool calls em tempo real.
+# Acesse em: http://127.0.0.1:24282/dashboard/
+web_dashboard: True
+web_dashboard_open_on_launch: False
+web_dashboard_interface: browser
+web_dashboard_listen_address: 127.0.0.1
+
+# ─── JetBrains Integration ───────────────────────────────────────────────────
+jetbrains_plugin_server_address: 127.0.0.1
+# Descomente e ajuste se o IntelliJ não for detectado automaticamente:
+# jetbrains_launch_command: "C:/Users/$($env:USERNAME)/AppData/Local/JetBrains/Toolbox/scripts/idea.cmd"
+
+# ─── Logging ─────────────────────────────────────────────────────────────────
+# Níveis: 10=DEBUG, 20=INFO, 30=WARNING, 40=ERROR
+log_level: 20
+gui_log_window: False
+trace_lsp_communication: False
+
+# ─── Performance ─────────────────────────────────────────────────────────────
+# Timeout por tool call (segundos). Padrão: 240.
+# 120s evita travamentos longos sem sacrificar operações legítimas.
+tool_timeout: 120
+
+# Limite de caracteres por resposta de tool.
+# 150K é suficiente para a maioria dos arquivos.
+default_max_tool_answer_chars: 150000
+
+# Estimador de tokens: CHAR_COUNT (rápido), TIKTOKEN_GPT4O (preciso)
+token_count_estimator: CHAR_COUNT
+
+# ─── Modes (Comportamento do Agente) ─────────────────────────────────────────
+# base_modes: SEMPRE ativos, não podem ser desligados por projeto.
+# - interactive: modo conversacional (necessário para Copilot Chat)
+# - editing: habilita edição de código
+base_modes:
+  - interactive
+  - editing
+
+# default_modes: ativos por padrão, projetos podem sobrescrever.
+# - planning: incentiva o agente a planejar antes de agir (alinhado com SDD)
+default_modes:
+  - planning
+
+# ─── Paths Ignorados Globalmente ─────────────────────────────────────────────
+# Exclui diretórios de build/dependências da análise.
+# Impacto: melhora drasticamente a performance (3-5x mais rápido).
+# Sintaxe: gitignore-style patterns.
+ignored_paths:
+  - "**/node_modules/**"
+  - "**/target/**"
+  - "**/build/**"
+  - "**/.gradle/**"
+  - "**/dist/**"
+  - "**/.idea/**"
+  - "**/.git/**"
+  - "**/vendor/**"
+  - "**/__pycache__/**"
+  - "**/bin/**"
+  - "**/obj/**"
+  - "**/.mvn/**"
+  - "**/.settings/**"
+  - "**/out/**"
+
+# ─── Tools ───────────────────────────────────────────────────────────────────
+# Excluir tools que não usamos (reduz ruído no prompt do agente).
+excluded_tools: []
+
+# Incluir tools opcionais úteis.
+included_optional_tools: []
+
+# ─── Memories ────────────────────────────────────────────────────────────────
+# Proteger memórias globais contra edição acidental pelo agente.
+read_only_memory_patterns:
+  - "global/.*"
+
+# Ignorar memórias arquivadas (reduz poluição no contexto do agente).
+ignored_memory_patterns:
+  - "_archive/.*"
+  - "_episodes/.*"
+
+# ─── Centralização de Dados (Opcional) ───────────────────────────────────────
+# Em vez de criar .serena/ dentro de cada projeto, centralizar tudo.
+# Descomente se preferir manter os repos limpos:
+# project_serena_folder_location: "$($env:USERPROFILE -replace '\\','/')/.serena/projects/\$projectFolderName"
+
+# ─── Language Server Settings (por linguagem) ────────────────────────────────
+# Configurações específicas para language servers individuais.
+# Exemplo para Java (Eclipse JDT LS):
+# ls_specific_settings:
+#   java:
+#     java.format.settings.url: "file:///path/to/eclipse-formatter.xml"
+#     java.completion.importOrder: ["java", "javax", "com", "org"]
+"@
+
+Set-Content -Path $serenaConfigFile -Value $configYaml -Encoding UTF8
+Write-Host "    OK: serena_config.yml gerado em: $serenaConfigFile" -ForegroundColor Green
+Write-Host "    Dashboard: http://127.0.0.1:24282/dashboard/" -ForegroundColor Gray
+Write-Host "    Backend: JetBrains | Timeout: 120s | Planning mode: ativo" -ForegroundColor Gray
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # Restaurar ambiente e verificação final
