@@ -19,6 +19,13 @@
 .PARAMETER WorkspacePath
     Caminho do workspace que será indexado. Padrão: $env:USERPROFILE\workspace
 
+.PARAMETER Scope
+    Define o escopo de indexação:
+    - 'project': Indexa apenas o WorkspacePath especificado (padrão).
+    - 'workspace': Indexa todo o diretório pai (~/workspace), permitindo busca cross-repository.
+    Quando 'workspace' é selecionado, o mcp-vector-search enxerga todos os projetos
+    no diretório de trabalho, possibilitando encontrar quem consome endpoints de outro projeto.
+
 .PARAMETER EmbeddingModel
     Nome do modelo de embedding no Ollama. Padrão: nomic-embed-text
 
@@ -43,6 +50,14 @@
     # Instala apontando para um workspace específico
 
 .EXAMPLE
+    .\scripts\setup-vector-search.ps1 -Scope workspace
+    # Indexa todo o ~/workspace para busca cross-repository
+
+.EXAMPLE
+    .\scripts\setup-vector-search.ps1 -Scope workspace -WorkspacePath "D:\projetos"
+    # Indexa todo o D:\projetos para busca cross-repository
+
+.EXAMPLE
     .\scripts\setup-vector-search.ps1 -EmbeddingModel "mxbai-embed-large"
     # Usa um modelo de embedding diferente
 
@@ -52,12 +67,14 @@
 
 .NOTES
     Autor: Rodrigo Maneschy
-    Versão: 1.0.0
+    Versão: 2.0.0
     Dependências: Python 3.11+, Ollama (com modelo de embedding)
 #>
 
 param(
     [string]$WorkspacePath = "$env:USERPROFILE\workspace",
+    [ValidateSet("project", "workspace")]
+    [string]$Scope = "project",
     [string]$EmbeddingModel = "nomic-embed-text",
     [string]$OllamaUrl = "http://localhost:11434",
     [string]$VenvPath = "$env:USERPROFILE\local-tools\python-venv",
@@ -76,6 +93,66 @@ Write-Host "║  mcp-vector-search — Setup Independente                     �
 Write-Host "║  Busca Semântica de Código via RAG + LanceDB                ║" -ForegroundColor Cyan
 Write-Host "╚══════════════════════════════════════════════════════════════╝" -ForegroundColor Cyan
 Write-Host ""
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Resolução de Escopo (Scope)
+# ═══════════════════════════════════════════════════════════════════════════════
+
+# Determinar o caminho efetivo de indexação com base no Scope
+$IndexTarget = $WorkspacePath
+
+if ($Scope -eq "workspace") {
+    # No modo workspace, indexa o diretório inteiro (todos os projetos)
+    # Se WorkspacePath aponta para um subprojeto, sobe para o diretório pai
+    if (-not (Test-Path $WorkspacePath)) {
+        # Se não existe, assume que é o diretório de workspace padrão
+        $IndexTarget = $WorkspacePath
+    } else {
+        # Verificar se WorkspacePath contém subpastas com .git (indicando multi-repo)
+        $gitRepos = Get-ChildItem -Path $WorkspacePath -Directory -Filter ".git" -Recurse -Depth 1 -ErrorAction SilentlyContinue
+        if ($gitRepos.Count -gt 0) {
+            # Já é um diretório de workspace com múltiplos repos
+            $IndexTarget = $WorkspacePath
+        } else {
+            # Pode ser um projeto individual, subir para o pai
+            $parentDir = Split-Path $WorkspacePath -Parent
+            $siblingGitRepos = Get-ChildItem -Path $parentDir -Directory | Where-Object {
+                Test-Path (Join-Path $_.FullName ".git")
+            }
+            if ($siblingGitRepos.Count -gt 1) {
+                $IndexTarget = $parentDir
+                Write-Host "  Scope 'workspace' detectou multi-repo em: $parentDir" -ForegroundColor Cyan
+                Write-Host "  Projetos encontrados: $($siblingGitRepos.Count)" -ForegroundColor Cyan
+                foreach ($repo in $siblingGitRepos | Select-Object -First 10) {
+                    Write-Host "    - $($repo.Name)" -ForegroundColor DarkGray
+                }
+                if ($siblingGitRepos.Count -gt 10) {
+                    Write-Host "    ... e mais $($siblingGitRepos.Count - 10) projetos" -ForegroundColor DarkGray
+                }
+            } else {
+                # Manter o WorkspacePath original
+                $IndexTarget = $WorkspacePath
+            }
+        }
+    }
+
+    Write-Host "" 
+    Write-Host "  ┌─────────────────────────────────────────────────────────────┐" -ForegroundColor Cyan
+    Write-Host "  │ MODO: WORKSPACE (Cross-Repository Search)                  │" -ForegroundColor Cyan
+    Write-Host "  ├─────────────────────────────────────────────────────────────┤" -ForegroundColor Cyan
+    Write-Host "  │ O mcp-vector-search indexará TODOS os projetos no          │" -ForegroundColor Cyan
+    Write-Host "  │ diretório, permitindo busca cross-repository.              │" -ForegroundColor Cyan
+    Write-Host "  │                                                             │" -ForegroundColor Cyan
+    Write-Host "  │ Diretório indexado: $(($IndexTarget).Substring(0, [Math]::Min($IndexTarget.Length, 37)).PadRight(37))│" -ForegroundColor Cyan
+    Write-Host "  │                                                             │" -ForegroundColor Cyan
+    Write-Host "  │ Isso permite perguntar ao Copilot:                         │" -ForegroundColor Cyan
+    Write-Host "  │ 'Quais projetos consomem o endpoint POST /api/orders?'     │" -ForegroundColor Cyan
+    Write-Host "  └─────────────────────────────────────────────────────────────┘" -ForegroundColor Cyan
+    Write-Host ""
+} else {
+    Write-Host "  Scope: project (indexa apenas $WorkspacePath)" -ForegroundColor DarkGray
+    Write-Host ""
+}
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # Modo: Uninstall
@@ -401,15 +478,48 @@ if ($mcpConfig.ContainsKey("mcpServers")) {
 }
 
 # Adicionar/atualizar entrada do mcp-vector-search
-$mcpConfig[$serversKey]["local-code-rag"] = @{
-    type    = "stdio"
-    command = $pythonExe
-    args    = @("-m", "mcp_vector_search.mcp.server", $WorkspacePath)
-    env     = @{
-        MCP_ENABLE_FILE_WATCHING = "true"
-        EMBEDDING_MODEL          = $EmbeddingModel
-        OLLAMA_BASE_URL          = $OllamaUrl
+if ($Scope -eq "workspace") {
+    # Modo workspace: registra servidor com escopo amplo (cross-repository)
+    $mcpConfig[$serversKey]["workspace-code-rag"] = @{
+        type    = "stdio"
+        command = $pythonExe
+        args    = @("-m", "mcp_vector_search.mcp.server", $IndexTarget)
+        env     = @{
+            MCP_ENABLE_FILE_WATCHING = "true"
+            EMBEDDING_MODEL          = $EmbeddingModel
+            OLLAMA_BASE_URL          = $OllamaUrl
+        }
     }
+
+    # Remover servidor antigo de escopo project (se existir) para evitar conflito
+    if ($mcpConfig[$serversKey].ContainsKey("local-code-rag")) {
+        $mcpConfig[$serversKey].Remove("local-code-rag")
+        Write-Host "    Removido servidor 'local-code-rag' (substituído por 'workspace-code-rag')." -ForegroundColor DarkGray
+    }
+
+    Write-Host "    Servidor registrado: workspace-code-rag" -ForegroundColor Green
+    Write-Host "    Escopo: $IndexTarget (todos os projetos)" -ForegroundColor Green
+} else {
+    # Modo project: registra servidor com escopo do projeto específico
+    $mcpConfig[$serversKey]["local-code-rag"] = @{
+        type    = "stdio"
+        command = $pythonExe
+        args    = @("-m", "mcp_vector_search.mcp.server", $IndexTarget)
+        env     = @{
+            MCP_ENABLE_FILE_WATCHING = "true"
+            EMBEDDING_MODEL          = $EmbeddingModel
+            OLLAMA_BASE_URL          = $OllamaUrl
+        }
+    }
+
+    # Remover servidor workspace (se existir) para evitar conflito
+    if ($mcpConfig[$serversKey].ContainsKey("workspace-code-rag")) {
+        $mcpConfig[$serversKey].Remove("workspace-code-rag")
+        Write-Host "    Removido servidor 'workspace-code-rag' (substituído por 'local-code-rag')." -ForegroundColor DarkGray
+    }
+
+    Write-Host "    Servidor registrado: local-code-rag" -ForegroundColor Green
+    Write-Host "    Escopo: $IndexTarget (projeto específico)" -ForegroundColor Green
 }
 
 # Salvar configuração
@@ -418,13 +528,15 @@ Write-Host "    OK: mcp.json atualizado em $McpJsonPath" -ForegroundColor Green
 
 # Exibir configuração aplicada
 Write-Host ""
+$serverName = if ($Scope -eq "workspace") { "workspace-code-rag" } else { "local-code-rag" }
 Write-Host "  ┌─────────────────────────────────────────────────────────────┐" -ForegroundColor DarkCyan
 Write-Host "  │ CONFIGURAÇÃO MCP APLICADA                                   │" -ForegroundColor DarkCyan
 Write-Host "  ├─────────────────────────────────────────────────────────────┤" -ForegroundColor DarkCyan
-Write-Host "  │ Server Name:    local-code-rag                              │" -ForegroundColor DarkCyan
+Write-Host "  │ Server Name:    $($serverName.PadRight(45))│" -ForegroundColor DarkCyan
+Write-Host "  │ Scope:          $($Scope.PadRight(45))│" -ForegroundColor DarkCyan
 Write-Host "  │ Transport:      stdio                                       │" -ForegroundColor DarkCyan
 Write-Host "  │ Command:        $($pythonExe.Substring(0, [Math]::Min($pythonExe.Length, 45)).PadRight(45))│" -ForegroundColor DarkCyan
-Write-Host "  │ Workspace:      $($WorkspacePath.Substring(0, [Math]::Min($WorkspacePath.Length, 45)).PadRight(45))│" -ForegroundColor DarkCyan
+Write-Host "  │ Index Target:   $($IndexTarget.Substring(0, [Math]::Min($IndexTarget.Length, 45)).PadRight(45))│" -ForegroundColor DarkCyan
 Write-Host "  │ Embedding:      $($EmbeddingModel.PadRight(45))│" -ForegroundColor DarkCyan
 Write-Host "  │ Ollama URL:     $($OllamaUrl.PadRight(45))│" -ForegroundColor DarkCyan
 Write-Host "  │ File Watching:  Habilitado                                  │" -ForegroundColor DarkCyan
@@ -457,12 +569,18 @@ Write-Host "║                                                              ║
 Write-Host "║  4. Reinicie o IntelliJ IDEA                                ║" -ForegroundColor Green
 Write-Host "║                                                              ║" -ForegroundColor Green
 Write-Host "║  5. No Copilot Chat (Agent Mode), verifique se              ║" -ForegroundColor Green
-Write-Host "║     'local-code-rag' aparece em Tools                       ║" -ForegroundColor Green
+Write-Host "║     '$serverName' aparece em Tools                   ║" -ForegroundColor Green
 Write-Host "║                                                              ║" -ForegroundColor Green
 Write-Host "╚══════════════════════════════════════════════════════════════╝" -ForegroundColor Green
 Write-Host ""
 Write-Host "  Dica: Para trocar o workspace indexado:" -ForegroundColor DarkGray
 Write-Host "    .\scripts\setup-vector-search.ps1 -WorkspacePath 'C:\projetos\outro-repo'" -ForegroundColor DarkGray
+Write-Host ""
+Write-Host "  Dica: Para busca cross-repository (todos os projetos):" -ForegroundColor DarkGray
+Write-Host "    .\scripts\setup-vector-search.ps1 -Scope workspace" -ForegroundColor DarkGray
+Write-Host ""
+Write-Host "  Dica: Para voltar ao modo projeto (apenas o repo aberto):" -ForegroundColor DarkGray
+Write-Host "    .\scripts\setup-vector-search.ps1 -Scope project" -ForegroundColor DarkGray
 Write-Host ""
 Write-Host "  Dica: Para remover completamente:" -ForegroundColor DarkGray
 Write-Host "    .\scripts\setup-vector-search.ps1 -Uninstall" -ForegroundColor DarkGray
