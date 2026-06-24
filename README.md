@@ -49,6 +49,7 @@ Para um aprofundamento técnico, consulte o documento de [Arquitetura da Soluç�
 
 scripts/                                 # Automação de Setup (PowerShell)
 ├── setup.ps1                            # Setup RAG Vetorial (Ollama + LanceDB + detecção de hardware)
+├── apply-ollama-tweaks.ps1              # Aplica/troca tweaks do Ollama por perfil de hardware
 ├── setup-serena.ps1                     # Setup Serena MCP (uv + LSP)
 ├── setup-n8n.ps1                        # Setup n8n (orquestrador visual de agentes)
 ├── setup-mcp-inspector.ps1              # Executa MCP Inspector (debug visual de tools)
@@ -232,6 +233,27 @@ Você pode habilitar o monitoramento avançado para ver **exatamente quais ferra
 ### Otimização de Desempenho
 
 Para entender em profundidade como cada configuração do Ollama afeta o desempenho dos agentes autônomos (incluindo KV Cache, Flash Attention e perfis por hardware), consulte o documento **[Ollama: Tweaks, KV Cache e Perfis de Hardware](docs/ollama-tweaks-e-perfis-hardware.md)**.
+
+### Aplicação de Tweaks do Ollama
+
+Para aplicar ou trocar as configurações de performance do Ollama sem executar o setup completo:
+
+```powershell
+# Detectar hardware e aplicar perfil automaticamente
+.\scripts\apply-ollama-tweaks.ps1
+
+# Forçar perfil específico
+.\scripts\apply-ollama-tweaks.ps1 -Profile power
+
+# Simular sem aplicar (dry-run)
+.\scripts\apply-ollama-tweaks.ps1 -DryRun
+
+# Verificar configurações ativas
+.\scripts\apply-ollama-tweaks.ps1 -Verify
+
+# Restaurar padrões de fábrica
+.\scripts\apply-ollama-tweaks.ps1 -Reset
+```
 
 Para maximizar a velocidade de resposta dos agentes e reduzir consumo de recursos, execute o script de otimização:
 
