@@ -48,7 +48,7 @@ Para um aprofundamento técnico, consulte o documento de [Arquitetura da Soluç�
 └── mcp-with-monitoring.json             # Configuração MCP com proxy de monitoramento
 
 scripts/                                 # Automação de Setup (PowerShell)
-├── setup.ps1                            # Setup RAG Vetorial (Ollama + LanceDB)
+├── setup.ps1                            # Setup RAG Vetorial (Ollama + LanceDB + detecção de hardware)
 ├── setup-serena.ps1                     # Setup Serena MCP (uv + LSP)
 ├── setup-n8n.ps1                        # Setup n8n (orquestrador visual de agentes)
 ├── setup-mcp-inspector.ps1              # Executa MCP Inspector (debug visual de tools)
@@ -67,6 +67,7 @@ monitoring/
 docs/                                    # Documentação técnica da infraestrutura
 ├── architecture.md                      # Arquitetura detalhada da solução
 ├── comparativo-alternativas.md          # Comparação com Sourcebot, Continue.dev, Greptile
+├── ollama-tweaks-e-perfis-hardware.md   # Tweaks do Ollama, KV Cache e perfis de hardware
 └── concepts/
     └── spec-driven-development-frameworks.md  # Comparativo SDD (SpecKit, Superpowers, OpenSpec)
 ```
@@ -229,6 +230,8 @@ Você pode habilitar o monitoramento avançado para ver **exatamente quais ferra
 ```
 
 ### Otimização de Desempenho
+
+Para entender em profundidade como cada configuração do Ollama afeta o desempenho dos agentes autônomos (incluindo KV Cache, Flash Attention e perfis por hardware), consulte o documento **[Ollama: Tweaks, KV Cache e Perfis de Hardware](docs/ollama-tweaks-e-perfis-hardware.md)**.
 
 Para maximizar a velocidade de resposta dos agentes e reduzir consumo de recursos, execute o script de otimização:
 
