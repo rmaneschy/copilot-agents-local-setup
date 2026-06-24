@@ -2,9 +2,9 @@
 
 ## Visão Geral do Projeto
 
-O projeto **Copilot Agents Local Setup** fornece os scripts, configurações e ferramentas necessários para provisionar um sistema de *Retrieval-Augmented Generation* (RAG) 100% local, voltado para a análise avançada de código-fonte. A solução foi concebida para operar em ambientes de desenvolvimento corporativos restritos, especificamente em máquinas com sistema operacional Windows 11, onde o usuário não possui privilégios de administrador e não há disponibilidade de contêineres Docker.
+O projeto **Copilot Agents Local Setup** fornece os scripts, configurações e ferramentas necessários para provisionar um ambiente de **code intelligence** 100% local, voltado para a análise avançada de código-fonte por agentes autônomos. A solução foi concebida para operar em ambientes de desenvolvimento corporativos restritos, especificamente em máquinas com sistema operacional Windows 11, onde o usuário não possui privilégios de administrador e não há disponibilidade de contêineres Docker.
 
-A integração principal ocorre com o **IntelliJ IDEA** (e opcionalmente VS Code) através do plugin **GitHub Copilot Chat**, utilizando o padrão *Model Context Protocol* (MCP). A solução combina **duas abordagens complementares**: busca semântica em linguagem natural (RAG Vetorial) e navegação estrutural determinística (Serena MCP via LSP).
+A integração principal ocorre com o **IntelliJ IDEA** (e opcionalmente VS Code) através do plugin **GitHub Copilot Chat**, utilizando o padrão *Model Context Protocol* (MCP). A solução combina **duas abordagens complementares**: knowledge graph com busca semântica integrada (codebase-memory-mcp) e navegação estrutural determinística (Serena MCP via LSP).
 
 > **Nota:** Os documentos conceituais sobre agentes, orquestradores e melhores práticas estão no repositório irmão [copilot-agents-setup](https://github.com/rmaneschy/copilot-agents-setup). Este repositório foca na **infraestrutura local** (instalação, configuração e operação), com exceção do [Comparativo de Frameworks SDD](docs/concepts/spec-driven-development-frameworks.md) que orienta a escolha de metodologia para o time.
 
@@ -16,12 +16,32 @@ A arquitetura baseia-se na composição de ferramentas de código aberto e leves
 
 | Componente | Função | Justificativa |
 | :--- | :--- | :--- |
-| **Ollama** | Motor local para modelos de linguagem (chat/completion). | Permite instalação em nível de usuário no Windows (sem admin). Utilizado para LLM local (chat), **não mais para embeddings** desde a v4 do mcp-vector-search. |
-| **mcp-vector-search v4** | Servidor MCP em Python que realiza análise AST, chunking inteligente e indexação vetorial do código. | Fornece *tools* de busca semântica vetorial. Usa `sentence-transformers` (modelo `all-MiniLM-L6-v2`) para gerar embeddings localmente, sem depender do Ollama. |
-| **LanceDB** | Banco de dados vetorial embutido (*serverless*). | Armazena os *embeddings* em disco de forma eficiente, sem utilizar o Docker. |
-| **Serena MCP** | Servidor MCP patrocinado pela Microsoft que utiliza o *Language Server Protocol* (LSP). | Fornece navegação determinística no código (find_symbol, find_references), complementando a busca vetorial. Instala-se via `uv` sem privilégios de administrador. |
+| **codebase-memory-mcp** | Motor de code intelligence que indexa o código em um knowledge graph persistente, expondo 14 ferramentas MCP (busca semântica, call graph, análise de impacto, arquitetura). | Binário estático único (C puro), zero dependências. Modelo de embedding (`nomic-embed-code`, 768d) compilado no binário. 158 linguagens via tree-sitter. 100% offline desde o primeiro uso. Substitui o mcp-vector-search v4 com abordagem plug-and-play. |
+| **Serena MCP** | Servidor MCP patrocinado pela Microsoft que utiliza o *Language Server Protocol* (LSP). | Fornece navegação determinística no código (find_symbol, find_references), complementando o knowledge graph. Instala-se via `uv` sem privilégios de administrador. |
+| **Ollama** (opcional) | Motor local para modelos de linguagem (chat/completion). | Permite instalação em nível de usuário no Windows (sem admin). Utilizado apenas para LLM local (chat), **não é necessário para code intelligence**. |
 
 Para um aprofundamento técnico, consulte o documento de [Arquitetura da Solução](docs/architecture.md) e a [Análise Comparativa com Alternativas de Mercado](docs/comparativo-alternativas.md) (como Sourcebot, Continue.dev e Greptile).
+
+---
+
+## Evolução da Solução: de RAG Vetorial para Knowledge Graph
+
+A solução evoluiu significativamente ao adotar o **codebase-memory-mcp** como motor principal de code intelligence, substituindo a abordagem anterior baseada em RAG vetorial (mcp-vector-search v4 + sentence-transformers + LanceDB).
+
+| Aspecto | Antes (mcp-vector-search v4) | Agora (codebase-memory-mcp) |
+| :--- | :--- | :--- |
+| **Instalação** | Python venv + pip + download de modelo (~90MB) | 1 comando (`install.ps1`), binário estático (~15MB) |
+| **Dependências** | Python 3.11+, sentence-transformers, LanceDB | Zero (binário auto-contido, C puro) |
+| **Embedding** | Download separado do HuggingFace | Compilado no binário (`nomic-embed-code`, 768d) |
+| **Linguagens** | Limitado (parsers Python) | 158 linguagens (tree-sitter vendored) |
+| **Abordagem** | Busca vetorial semântica apenas | Knowledge graph + busca semântica + call graph + cross-service |
+| **MCP Tools** | 3-5 tools | 14 tools (search, trace, architecture, impact, Cypher) |
+| **Offline** | Após download inicial do modelo | 100% offline desde o primeiro uso |
+| **Cross-service** | Não suportado | HTTP, gRPC, GraphQL, pub-sub |
+| **Team sharing** | Não suportado | `.codebase-memory/graph.db.zst` commitável via git |
+| **Benchmark** | — | 99% token reduction, queries <1ms, Linux kernel (28M LOC) em 3 min |
+
+O script legado `setup-vector-search.ps1` permanece disponível para cenários de migração, mas o **setup recomendado** agora utiliza `setup-codebase-memory.ps1`.
 
 ---
 
@@ -48,8 +68,9 @@ Para um aprofundamento técnico, consulte o documento de [Arquitetura da Soluç�
 └── mcp-with-monitoring.json             # Configuração MCP com proxy de monitoramento
 
 scripts/                                 # Automação de Setup (PowerShell)
-├── setup.ps1                            # Setup completo (Ollama + LanceDB + detecção de hardware)
-├── setup-vector-search.ps1              # Setup independente do mcp-vector-search (RAG)
+├── setup.ps1                            # Setup completo (detecção de hardware + componentes)
+├── setup-codebase-memory.ps1            # [RECOMENDADO] Setup plug-and-play do codebase-memory-mcp
+├── setup-vector-search.ps1              # [LEGADO] Setup do mcp-vector-search v4 (RAG vetorial)
 ├── apply-ollama-tweaks.ps1              # Aplica/troca tweaks do Ollama por perfil de hardware
 ├── setup-serena.ps1                     # Setup Serena MCP (uv + LSP)
 ├── setup-n8n.ps1                        # Setup n8n (orquestrador visual de agentes)
@@ -83,58 +104,105 @@ O processo de instalação foi automatizado por meio de scripts PowerShell, proj
 ### Pré-requisitos
 
 1. **Windows 11** (sem necessidade de privilégios administrativos).
-2. **Python 3.11+** (pode ser instalado via Microsoft Store).
-3. **Ollama** (opcional para LLM local; baixe em [ollama.com/download](https://ollama.com/download)). **Nota:** desde a v4 do mcp-vector-search, o Ollama **não é mais necessário para embeddings** — o modelo `all-MiniLM-L6-v2` é executado diretamente via `sentence-transformers`.
-4. **IntelliJ IDEA** com o plugin **GitHub Copilot** (versão 1.5.57 ou superior, com Agent Mode e MCP habilitados).
+2. **IntelliJ IDEA** com o plugin **GitHub Copilot** (versão 1.5.57 ou superior, com Agent Mode e MCP habilitados).
+3. **Conexão com internet** (apenas para o download inicial do binário, ~15MB; após isso, 100% offline).
+4. **Ollama** (opcional, apenas se desejar LLM local para chat; baixe em [ollama.com/download](https://ollama.com/download)).
 
-### Passos para Instalação
+> **Nota:** Python, Node.js, Docker e API keys **não são mais necessários** para a solução principal de code intelligence.
+
+### Passos para Instalação (Recomendado)
 
 1. Clone este repositório em sua máquina local.
 2. Abra o PowerShell e navegue até a pasta do projeto.
 3. Execute o script de configuração principal:
 
 ```powershell
-.\scripts\setup.ps1
+# Instalar codebase-memory-mcp (code intelligence via knowledge graph)
+.\scripts\setup-codebase-memory.ps1
+
+# Instalar Serena MCP (navegação LSP determinística)
 .\scripts\setup-serena.ps1
 ```
 
-> **Atenção para usuários corporativos:** Se a sua rede utiliza um proxy com inspeção SSL/TLS, o script `setup.ps1` pode falhar no download do modelo com erro de `SHA256 digest`. Neste caso, utilize o script de contorno:
+Isso é tudo. O `setup-codebase-memory.ps1` realiza:
+
+1. Download do binário estático (~15MB) com verificação SHA-256
+2. Instalação em `%LOCALAPPDATA%\Programs\codebase-memory-mcp`
+3. Adição ao PATH do usuário (sem admin)
+4. Configuração automática do `mcp.json` para GitHub Copilot no IntelliJ
+5. Opcionalmente, indexação inicial do workspace
+
+> **Variante com visualização 3D do knowledge graph:**
 > ```powershell
-> .\scripts\setup-proxy-workaround.ps1
+> .\scripts\setup-codebase-memory.ps1 -Variant ui
+> # Abre http://localhost:9749 para explorar o grafo interativamente
 > ```
-
-Os scripts irão configurar o ambiente virtual Python, instalar o `mcp-vector-search` v4 (com `sentence-transformers` para embeddings locais), baixar o modelo de embedding `all-MiniLM-L6-v2` do HuggingFace (apenas na primeira execução), instalar o **Serena MCP** via `uv` (gerenciador de pacotes) e configurar o arquivo `mcp.json` na pasta de configuração do IntelliJ (`~/.config/github-copilot/intellij/`).
-
-> **Ambiente offline / corporativo:** Após a primeira execução com internet (que baixa o modelo de ~90MB), o sistema funciona 100% offline. Para configurar o modo offline explicitamente:
-> ```powershell
-> .\scripts\setup-vector-search.ps1 -OfflineMode
-> ```
-
-*Nota: Existe também um script de setup alternativo (`setup-alternative-node.ps1`) baseado em Node.js/Bun, caso prefira não utilizar o Ollama.*
 
 ### Indexação do Workspace
 
-Na v4 do mcp-vector-search, a indexação ocorre **automaticamente** na primeira busca semântica e é mantida atualizada via *file watching*. Para indexação manual ou cross-repository:
+A indexação ocorre **automaticamente** na primeira busca semântica via Copilot. Para indexação manual ou antecipada:
 
 ```powershell
 # Indexar workspace específico (modo project)
-.\scripts\setup-vector-search.ps1 -WorkspacePath "C:\Users\SEU_USUARIO\workspace\meu-projeto"
+.\scripts\setup-codebase-memory.ps1 -WorkspacePath "C:\Users\SEU_USUARIO\workspace\meu-projeto"
 
 # Indexar todos os projetos (modo workspace — busca cross-repository)
-.\scripts\setup-vector-search.ps1 -Scope workspace
+.\scripts\setup-codebase-memory.ps1 -Scope workspace
+
+# Habilitar auto-index (indexa automaticamente ao conectar a um novo projeto)
+.\scripts\setup-codebase-memory.ps1 -AutoIndex
 ```
 
-O script `index-workspace.ps1` continua disponível para reindexação forçada:
+Ou diretamente via CLI:
 
 ```powershell
-.\scripts\index-workspace.ps1 -Path "C:\Users\SEU_USUARIO\workspace"
+cd C:\seu-projeto
+codebase-memory-mcp index
 ```
+
+O índice é mantido atualizado automaticamente via **git-based change detection** — não é necessário reindexar manualmente.
+
+### Compartilhamento de Índice com o Time
+
+O knowledge graph pode ser compartilhado via git, evitando que cada desenvolvedor precise reindexar do zero:
+
+```powershell
+# Commitar o índice comprimido
+git add .codebase-memory/graph.db.zst
+git commit -m "chore: atualiza índice do knowledge graph"
+
+# Colegas fazem incremental diff (não full reindex)
+git pull  # índice atualizado automaticamente
+```
+
+---
+
+## Ferramentas MCP Disponíveis (14 tools)
+
+O codebase-memory-mcp expõe 14 ferramentas via MCP que o GitHub Copilot pode invocar automaticamente no Agent Mode:
+
+| Ferramenta | Função |
+| :--- | :--- |
+| `search_graph` | Busca estrutural (regex, label, degree, file scoping) |
+| `semantic_query` | Busca semântica vetorial em linguagem natural |
+| `trace_call_path` | Call graph (quem chama / é chamado por) |
+| `get_architecture` | Visão geral da arquitetura (linguagens, pacotes, entry points, rotas, hotspots) |
+| `detect_changes` | Impacto de mudanças (git diff → símbolos afetados com classificação de risco) |
+| `query_graph` | Queries Cypher-like no knowledge graph |
+| `search_code` | Grep inteligente (graph-augmented, apenas em arquivos indexados) |
+| `get_code_snippet` | Extrai trecho de código por símbolo |
+| `manage_adr` | Architecture Decision Records (CRUD persistente entre sessões) |
+| `ingest_traces` | Importar traces de execução |
+| `dead_code` | Detecta funções com zero chamadores (excluindo entry points) |
+| `cross_service` | Descobre comunicação HTTP/gRPC/GraphQL entre serviços |
+| `similar_code` | Detecta near-clones via MinHash + LSH (Jaccard scored) |
+| `community_detect` | Detecta módulos funcionais via Louvain clustering |
 
 ---
 
 ## Utilização e Prompts Especializados
 
-Uma vez configurado, o servidor MCP local expõe ferramentas de busca semântica para o GitHub Copilot. Você pode invocar os agentes e *prompts* diretamente no chat do IntelliJ para realizar tarefas complexas.
+Uma vez configurado, o servidor MCP local expõe as ferramentas de code intelligence para o GitHub Copilot. Você pode invocar os agentes e *prompts* diretamente no chat do IntelliJ para realizar tarefas complexas.
 
 ### 1. Análise Arquitetural de Serviço
 
@@ -164,6 +232,18 @@ Você pode fazer perguntas direcionadas, como:
 - "Quais serviços dependem deste contrato OpenAPI?"
 - "Onde a autenticação é validada e quais serviços ignoram autorização?"
 
+### 5. Análise de Impacto (Novo)
+
+Com o codebase-memory-mcp, é possível analisar o impacto de mudanças antes de fazer commit:
+
+> "Analise o impacto das minhas mudanças atuais (git diff). Quais funções são afetadas? Qual o risco de regressão?"
+
+### 6. Dead Code Detection (Novo)
+
+Para identificar código morto no projeto:
+
+> "Encontre funções que nunca são chamadas neste projeto. Exclua entry points e handlers de framework."
+
 ---
 
 ## Ferramentas Visuais (MCP Inspector e n8n)
@@ -175,7 +255,7 @@ Além do monitoramento via proxy, o projeto oferece duas ferramentas visuais com
 O [MCP Inspector](https://github.com/modelcontextprotocol/inspector) é a ferramenta oficial do Model Context Protocol para testar e depurar servidores MCP. Ele fornece uma interface web interativa onde é possível invocar *tools*, consultar *resources* e testar *prompts* expostos pelos servidores locais.
 
 ```powershell
-# Inspecionar o mcp-vector-search (padrão)
+# Inspecionar o codebase-memory-mcp (padrão)
 .\scripts\setup-mcp-inspector.ps1
 
 # Inspecionar o Serena MCP
@@ -220,7 +300,7 @@ O projeto inclui ferramentas completas para monitorar a saúde do sistema e o de
 
 ### Verificação de Saúde (Health Check)
 
-Para verificar se todos os componentes (Ollama, Python, Serena, RAG) estão rodando corretamente:
+Para verificar se todos os componentes (codebase-memory-mcp, Serena, Ollama) estão rodando corretamente:
 
 ```powershell
 .\scripts\health-check.ps1
@@ -285,8 +365,8 @@ Este script configura o Ollama keep-alive (modelo permanente em memória), cria 
 
 | Repositório | Propósito |
 | :--- | :--- |
-| [copilot-agents-setup](https://github.com/rmaneschy/copilot-agents-setup) | Estrutura de agentes, skills, instruções, prompts e documentação conceitual (SDD, MCP, Orquestradores, Agentes Agnósticos). |
-| **Este repositório** | Scripts, configs e ferramentas para instalar e operar a infraestrutura local (Ollama, RAG, Serena, LanceDB). |
+| [copilot-agents-setup](https://github.com/rmaneschy/copilot-agents-setup) | Estrutura de agentes, skills, instruções, prompts e diretrizes para o agente autônomo de desenvolvimento. |
+| **Este repositório** | Scripts, configs e ferramentas para instalar e operar a infraestrutura local (codebase-memory-mcp, Serena, Ollama). |
 
 ---
 
