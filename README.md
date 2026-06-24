@@ -16,8 +16,8 @@ A arquitetura baseia-se na composição de ferramentas de código aberto e leves
 
 | Componente | Função | Justificativa |
 | :--- | :--- | :--- |
-| **Ollama** | Motor local para modelos de linguagem e *embeddings* (ex: `nomic-embed-text`). | Permite instalação em nível de usuário no Windows (sem admin) e gera representações vetoriais do código localmente. |
-| **mcp-vector-search** | Servidor MCP em Python que realiza a análise da *Abstract Syntax Tree* (AST) e a indexação do código. | Fornece *tools* de busca semântica vetorial baseada em linguagem natural. |
+| **Ollama** | Motor local para modelos de linguagem (chat/completion). | Permite instalação em nível de usuário no Windows (sem admin). Utilizado para LLM local (chat), **não mais para embeddings** desde a v4 do mcp-vector-search. |
+| **mcp-vector-search v4** | Servidor MCP em Python que realiza análise AST, chunking inteligente e indexação vetorial do código. | Fornece *tools* de busca semântica vetorial. Usa `sentence-transformers` (modelo `all-MiniLM-L6-v2`) para gerar embeddings localmente, sem depender do Ollama. |
 | **LanceDB** | Banco de dados vetorial embutido (*serverless*). | Armazena os *embeddings* em disco de forma eficiente, sem utilizar o Docker. |
 | **Serena MCP** | Servidor MCP patrocinado pela Microsoft que utiliza o *Language Server Protocol* (LSP). | Fornece navegação determinística no código (find_symbol, find_references), complementando a busca vetorial. Instala-se via `uv` sem privilégios de administrador. |
 
@@ -84,7 +84,7 @@ O processo de instalação foi automatizado por meio de scripts PowerShell, proj
 
 1. **Windows 11** (sem necessidade de privilégios administrativos).
 2. **Python 3.11+** (pode ser instalado via Microsoft Store).
-3. **Ollama** (baixe o instalador do Windows em [ollama.com/download](https://ollama.com/download), que instala no diretório do usuário).
+3. **Ollama** (opcional para LLM local; baixe em [ollama.com/download](https://ollama.com/download)). **Nota:** desde a v4 do mcp-vector-search, o Ollama **não é mais necessário para embeddings** — o modelo `all-MiniLM-L6-v2` é executado diretamente via `sentence-transformers`.
 4. **IntelliJ IDEA** com o plugin **GitHub Copilot** (versão 1.5.57 ou superior, com Agent Mode e MCP habilitados).
 
 ### Passos para Instalação
@@ -103,13 +103,28 @@ O processo de instalação foi automatizado por meio de scripts PowerShell, proj
 > .\scripts\setup-proxy-workaround.ps1
 > ```
 
-Os scripts irão configurar o ambiente virtual Python, instalar o `mcp-vector-search`, baixar o modelo de *embedding* no Ollama, instalar o **Serena MCP** via `uv` (gerenciador de pacotes) e configurar o arquivo `mcp.json` na pasta de configuração do IntelliJ (`~/.config/github-copilot/intellij/`).
+Os scripts irão configurar o ambiente virtual Python, instalar o `mcp-vector-search` v4 (com `sentence-transformers` para embeddings locais), baixar o modelo de embedding `all-MiniLM-L6-v2` do HuggingFace (apenas na primeira execução), instalar o **Serena MCP** via `uv` (gerenciador de pacotes) e configurar o arquivo `mcp.json` na pasta de configuração do IntelliJ (`~/.config/github-copilot/intellij/`).
+
+> **Ambiente offline / corporativo:** Após a primeira execução com internet (que baixa o modelo de ~90MB), o sistema funciona 100% offline. Para configurar o modo offline explicitamente:
+> ```powershell
+> .\scripts\setup-vector-search.ps1 -OfflineMode
+> ```
 
 *Nota: Existe também um script de setup alternativo (`setup-alternative-node.ps1`) baseado em Node.js/Bun, caso prefira não utilizar o Ollama.*
 
 ### Indexação do Workspace
 
-Após a configuração, é necessário indexar o código-fonte do seu diretório de trabalho:
+Na v4 do mcp-vector-search, a indexação ocorre **automaticamente** na primeira busca semântica e é mantida atualizada via *file watching*. Para indexação manual ou cross-repository:
+
+```powershell
+# Indexar workspace específico (modo project)
+.\scripts\setup-vector-search.ps1 -WorkspacePath "C:\Users\SEU_USUARIO\workspace\meu-projeto"
+
+# Indexar todos os projetos (modo workspace — busca cross-repository)
+.\scripts\setup-vector-search.ps1 -Scope workspace
+```
+
+O script `index-workspace.ps1` continua disponível para reindexação forçada:
 
 ```powershell
 .\scripts\index-workspace.ps1 -Path "C:\Users\SEU_USUARIO\workspace"
