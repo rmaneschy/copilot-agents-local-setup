@@ -48,7 +48,8 @@ Para um aprofundamento técnico, consulte o documento de [Arquitetura da Soluç�
 └── mcp-with-monitoring.json             # Configuração MCP com proxy de monitoramento
 
 scripts/                                 # Automação de Setup (PowerShell)
-├── setup.ps1                            # Setup RAG Vetorial (Ollama + LanceDB + detecção de hardware)
+├── setup.ps1                            # Setup completo (Ollama + LanceDB + detecção de hardware)
+├── setup-vector-search.ps1              # Setup independente do mcp-vector-search (RAG)
 ├── apply-ollama-tweaks.ps1              # Aplica/troca tweaks do Ollama por perfil de hardware
 ├── setup-serena.ps1                     # Setup Serena MCP (uv + LSP)
 ├── setup-n8n.ps1                        # Setup n8n (orquestrador visual de agentes)
