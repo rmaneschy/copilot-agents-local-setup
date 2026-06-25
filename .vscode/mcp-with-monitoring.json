@@ -1,23 +1,57 @@
 {
-  "inputs": [],
+  "inputs": [
+    {
+      "id": "jiraBaseUrl",
+      "type": "promptString",
+      "description": "URL base do Jira (ex: https://your-company.atlassian.net)"
+    },
+    {
+      "id": "jiraApiToken",
+      "type": "promptString",
+      "description": "API Token do Jira",
+      "password": true
+    },
+    {
+      "id": "jiraUserEmail",
+      "type": "promptString",
+      "description": "E-mail do usuário Jira"
+    }
+  ],
   "servers": {
-    "codebase-memory": {
+    "code-navigation": {
+      "type": "stdio",
       "command": "python",
       "args": [
         "${userHome}/local-tools/copilot-agents-local-setup/monitoring/mcp-proxy-logger.py",
-        "--server", "codebase-memory",
+        "--server", "code-navigation",
+        "--command", "serena",
+        "--args", "start-mcp-server", "--context=vscode"
+      ]
+    },
+    "code-search": {
+      "type": "stdio",
+      "command": "python",
+      "args": [
+        "${userHome}/local-tools/copilot-agents-local-setup/monitoring/mcp-proxy-logger.py",
+        "--server", "code-search",
         "--command", "codebase-memory-mcp",
         "--args", ""
       ]
     },
-    "serena": {
+    "issue-tracker": {
+      "type": "stdio",
       "command": "python",
       "args": [
         "${userHome}/local-tools/copilot-agents-local-setup/monitoring/mcp-proxy-logger.py",
-        "--server", "serena",
-        "--command", "serena",
-        "--args", "start-mcp-server", "--context=vscode"
-      ]
+        "--server", "issue-tracker",
+        "--command", "npx",
+        "--args", "-y", "@anthropic/atlassian-rovo-mcp"
+      ],
+      "env": {
+        "JIRA_BASE_URL": "${input:jiraBaseUrl}",
+        "JIRA_API_TOKEN": "${input:jiraApiToken}",
+        "JIRA_USER_EMAIL": "${input:jiraUserEmail}"
+      }
     }
   }
 }
