@@ -1,8 +1,13 @@
 <#
 .SYNOPSIS
-Script de configuração do RAG local para código-fonte no Windows (Sem Admin, Sem Docker).
+[LEGADO] Script de configuração do RAG local para código-fonte no Windows (Sem Admin, Sem Docker).
 
 .DESCRIPTION
+[LEGADO] Este script foi substituído pelo setup-codebase-memory.ps1, que é mais simples,
+não requer Python/Ollama e oferece mais funcionalidades (knowledge graph + busca semântica).
+Use este script apenas se precisar especificamente do Ollama + mcp-vector-search por
+motivos de compatibilidade.
+
 Este script realiza o download e configuração do Ollama, instala o Python (se necessário),
 configura o ambiente virtual e instala o servidor MCP mcp-vector-search.
 

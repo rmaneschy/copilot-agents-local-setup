@@ -12,7 +12,7 @@ cada servidor, sem abrir o navegador.
 
 Requisitos:
 - Node.js >= 18 disponível no PATH
-- Servidores MCP configurados (mcp-vector-search, Serena)
+- Servidores MCP configurados (codebase-memory-mcp, Serena)
 
 .EXAMPLE
 .\inspect-mcp.ps1
@@ -22,7 +22,6 @@ Requisitos:
 $ErrorActionPreference = "Continue"
 
 $ToolsDir = "$HOME\local-tools"
-$PythonVenvDir = "$ToolsDir\mcp-venv"
 $SerenaDir = "$ToolsDir\serena"
 
 Write-Host ""
@@ -45,35 +44,43 @@ if (-not (Get-Command node -ErrorAction SilentlyContinue)) {
 
 $servers = @()
 
-# Detectar mcp-vector-search
-$mcpVectorSearch = "$PythonVenvDir\Scripts\mcp-vector-search.exe"
-if (Test-Path $mcpVectorSearch) {
+# Detectar codebase-memory-mcp
+$cbmBin = Get-Command codebase-memory-mcp -ErrorAction SilentlyContinue
+if ($cbmBin) {
     $servers += @{
-        Name = "mcp-vector-search"
-        Command = $mcpVectorSearch
+        Name = "codebase-memory-mcp"
+        Command = $cbmBin.Source
         Args = @()
     }
-} elseif (Test-Path "$PythonVenvDir\Scripts\python.exe") {
-    $servers += @{
-        Name = "mcp-vector-search (via python)"
-        Command = "$PythonVenvDir\Scripts\python.exe"
-        Args = @("-m", "mcp_vector_search")
+} else {
+    $cbmPath = "$env:LOCALAPPDATA\Programs\codebase-memory-mcp\codebase-memory-mcp.exe"
+    if (Test-Path $cbmPath) {
+        $servers += @{
+            Name = "codebase-memory-mcp"
+            Command = $cbmPath
+            Args = @()
+        }
     }
 }
 
 # Detectar Serena
-$serenaBinary = "$SerenaDir\serena.exe"
-if (Test-Path $serenaBinary) {
+if (Get-Command serena -ErrorAction SilentlyContinue) {
     $servers += @{
         Name = "Serena MCP"
-        Command = $serenaBinary
-        Args = @()
+        Command = (Get-Command serena).Source
+        Args = @("start-mcp-server", "--context=jb-copilot-plugin")
+    }
+} elseif (Test-Path "$SerenaDir\serena.exe") {
+    $servers += @{
+        Name = "Serena MCP"
+        Command = "$SerenaDir\serena.exe"
+        Args = @("start-mcp-server", "--context=jb-copilot-plugin")
     }
 }
 
 if ($servers.Count -eq 0) {
     Write-Host "  Nenhum servidor MCP detectado." -ForegroundColor Yellow
-    Write-Host "  Execute .\scripts\setup.ps1 e .\scripts\setup-serena.ps1 primeiro." -ForegroundColor DarkGray
+    Write-Host "  Execute .\scripts\setup-codebase-memory.ps1 e .\scripts\setup-serena.ps1 primeiro." -ForegroundColor DarkGray
     exit 1
 }
 
@@ -87,6 +94,12 @@ foreach ($server in $servers) {
     # Verificar se o binário existe e é executável
     if (Test-Path $server.Command) {
         Write-Host "    Status: Binario encontrado" -ForegroundColor Green
+
+        # Para codebase-memory-mcp, mostrar versão
+        if ($server.Name -eq "codebase-memory-mcp") {
+            $version = & $server.Command --version 2>&1
+            Write-Host "    Versao: $version" -ForegroundColor DarkGray
+        }
     } else {
         Write-Host "    Status: Binario NAO encontrado" -ForegroundColor Red
     }
@@ -96,7 +109,7 @@ foreach ($server in $servers) {
 Write-Host "─────────────────────────────────────────────────────────────" -ForegroundColor DarkGray
 Write-Host ""
 Write-Host "Para inspecionar visualmente um servidor, execute:" -ForegroundColor White
-Write-Host "  .\scripts\setup-mcp-inspector.ps1 -Server vector-search" -ForegroundColor Cyan
+Write-Host "  .\scripts\setup-mcp-inspector.ps1 -Server codebase-memory" -ForegroundColor Cyan
 Write-Host "  .\scripts\setup-mcp-inspector.ps1 -Server serena" -ForegroundColor Cyan
 Write-Host ""
 Write-Host "Para abrir o orquestrador visual (n8n):" -ForegroundColor White

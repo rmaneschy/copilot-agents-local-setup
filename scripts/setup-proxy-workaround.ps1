@@ -213,7 +213,7 @@ if ($models -match $ModelName) {
     Write-Host "║  Origem: HuggingFace (nomic-ai/nomic-embed-text-v1.5-GGUF) ║" -ForegroundColor Green
     Write-Host "║  Quantização: Q2_K (~100 MB)                                ║" -ForegroundColor Green
     Write-Host "║                                                             ║" -ForegroundColor Green
-    Write-Host "║  O modelo está pronto para uso com mcp-vector-search.       ║" -ForegroundColor Green
+    Write-Host "║  O modelo está pronto para uso com Ollama (LLM local).       ║" -ForegroundColor Green
     Write-Host "╚══════════════════════════════════════════════════════════════╝" -ForegroundColor Green
 } else {
     Write-Host "  AVISO: Modelo não apareceu em 'ollama list'." -ForegroundColor Yellow

@@ -6,7 +6,7 @@ Script de instalação e configuração do n8n como orquestrador visual de agent
 O n8n é uma plataforma de automação de workflows com suporte nativo a agentes de IA
 e ao Model Context Protocol (MCP). Ele fornece um canvas visual onde o desenvolvedor
 pode desenhar fluxos multi-agentes conectando LLMs locais (Ollama), servidores MCP
-(vector-search, Serena) e integrações externas (Jira, GitHub, etc.).
+(codebase-memory-mcp, Serena) e integrações externas (Jira, GitHub, etc.).
 
 Este script:
 - Verifica se o Node.js está disponível no PATH
@@ -181,7 +181,7 @@ Write-Host "  │  Interface web: http://localhost:$Port                   │" 
 Write-Host "  │  Dados locais:  $N8nDataDir              │" -ForegroundColor Green
 Write-Host "  │                                                         │" -ForegroundColor Green
 Write-Host "  │  Dica: Use o no 'MCP Client Tool' para conectar os     │" -ForegroundColor Green
-Write-Host "  │  servidores MCP locais (vector-search, Serena).         │" -ForegroundColor Green
+Write-Host "  │  servidores MCP locais (codebase-memory-mcp, Serena).         │" -ForegroundColor Green
 Write-Host "  │                                                         │" -ForegroundColor Green
 Write-Host "  │  Pressione Ctrl+C para encerrar                        │" -ForegroundColor Green
 Write-Host "  └─────────────────────────────────────────────────────────┘" -ForegroundColor Green

@@ -1,8 +1,12 @@
 <#
 .SYNOPSIS
-    Instala e configura o mcp-vector-search v4.x para busca semântica de código via RAG.
+    [LEGADO] Instala e configura o mcp-vector-search v4.x para busca semântica de código via RAG.
 
 .DESCRIPTION
+    [LEGADO] Este script foi substituído pelo setup-codebase-memory.ps1, que é mais simples,
+    não requer Python e oferece mais funcionalidades (knowledge graph + busca semântica + call graph).
+    Use este script apenas se precisar especificamente do mcp-vector-search por compatibilidade.
+
     Este script automatiza a instalação independente do mcp-vector-search v4.x, que fornece
     capacidades de busca semântica (RAG - Retrieval Augmented Generation) ao GitHub Copilot
     Agent Mode via protocolo MCP.

@@ -225,7 +225,7 @@ O agente autônomo (Copilot + MCP tools) depende do Ollama para duas operações
 - Raciocínio multi-step longo (chain-of-thought com 10+ passos)
 
 **O que o agente NÃO consegue fazer:**
-- Analisar o projeto inteiro (centenas de arquivos) — isso é papel do RAG/vector-search
+- Analisar o projeto inteiro (centenas de arquivos) — isso é papel do codebase-memory-mcp (knowledge graph)
 - Substituir o julgamento humano em decisões arquiteturais de alto nível
 
 **Experiência do engenheiro:**

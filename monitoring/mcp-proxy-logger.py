@@ -8,7 +8,7 @@ que repassa para o MCP server real e registra cada request/response.
 
 Uso:
     python mcp-proxy-logger.py --server "serena" --command "serena" --args "--context=jb-copilot-plugin"
-    python mcp-proxy-logger.py --server "local-code-rag" --command "npx" --args "mcp-vector-search"
+    python mcp-proxy-logger.py --server "codebase-memory" --command "codebase-memory-mcp" --args ""
 
 O proxy é transparente: stdin/stdout passam intactos para o server real.
 Os logs são escritos em ~/.copilot-metrics/calls.jsonl

@@ -1,64 +1,60 @@
 <#
 .SYNOPSIS
-    Aplica otimizações de desempenho ao ambiente RAG + Serena.
+    Aplica otimizações de desempenho ao ambiente de code intelligence local.
 
 .DESCRIPTION
-    Este script configura Ollama keep-alive, cria índices no LanceDB,
-    executa compactação e aquece os componentes para uso imediato.
+    Este script configura Ollama keep-alive (opcional, para LLM local),
+    verifica o estado do knowledge graph e aquece os componentes para uso imediato.
 
-.PARAMETER CreateIndexes
-    Cria índices vetoriais e escalares no LanceDB.
-
-.PARAMETER Compact
-    Executa compactação e limpeza de versões antigas no LanceDB.
+    Nota: O codebase-memory-mcp é auto-otimizado (SQLite WAL mode, auto-vacuum).
+    Este script foca em otimizações do Ollama (LLM local) e verificação geral.
 
 .PARAMETER WarmUp
-    Configura keep-alive e aquece o modelo de embeddings.
+    Configura Ollama keep-alive e aquece o modelo de LLM (opcional).
+
+.PARAMETER VerifyGraph
+    Verifica o estado do knowledge graph do codebase-memory-mcp.
 
 .PARAMETER All
-    Executa todas as otimizações.
+    Executa todas as otimizações e verificações.
 
 .EXAMPLE
     .\optimize-environment.ps1 -All
     .\optimize-environment.ps1 -WarmUp
-    .\optimize-environment.ps1 -CreateIndexes -Compact
+    .\optimize-environment.ps1 -VerifyGraph
 #>
 
 param(
-    [switch]$CreateIndexes,
-    [switch]$Compact,
     [switch]$WarmUp,
+    [switch]$VerifyGraph,
     [switch]$All
 )
 
 $ErrorActionPreference = "Stop"
 
-if (-not ($CreateIndexes -or $Compact -or $WarmUp -or $All)) {
+if (-not ($WarmUp -or $VerifyGraph -or $All)) {
     Write-Host "Uso: .\optimize-environment.ps1 -All" -ForegroundColor Yellow
     Write-Host "     .\optimize-environment.ps1 -WarmUp"
-    Write-Host "     .\optimize-environment.ps1 -CreateIndexes -Compact"
+    Write-Host "     .\optimize-environment.ps1 -VerifyGraph"
     Write-Host ""
     Write-Host "Flags disponíveis:" -ForegroundColor Cyan
-    Write-Host "  -WarmUp        Configura keep-alive e aquece Ollama"
-    Write-Host "  -CreateIndexes Cria índices vetoriais e escalares no LanceDB"
-    Write-Host "  -Compact       Compacta fragmentos e limpa versões antigas"
-    Write-Host "  -All           Executa todas as otimizações"
+    Write-Host "  -WarmUp       Configura keep-alive e aquece Ollama (LLM local)"
+    Write-Host "  -VerifyGraph  Verifica estado do knowledge graph (codebase-memory-mcp)"
+    Write-Host "  -All          Executa todas as otimizações e verificações"
     exit 0
 }
 
 Write-Host ""
-Write-Host "========================================" -ForegroundColor Cyan
-Write-Host "  Otimização de Ambiente RAG + Serena" -ForegroundColor Cyan
-Write-Host "========================================" -ForegroundColor Cyan
+Write-Host "═══════════════════════════════════════════════════" -ForegroundColor Cyan
+Write-Host "  Otimização de Ambiente: Code Intelligence Local" -ForegroundColor Cyan
+Write-Host "═══════════════════════════════════════════════════" -ForegroundColor Cyan
 Write-Host ""
 
-$dbPath = Join-Path $env:USERPROFILE ".copilot-rag\lancedb"
-
 # ─────────────────────────────────────────────
-# ETAPA 1: Ollama Keep-Alive e Warm-Up
+# ETAPA 1: Ollama Keep-Alive e Warm-Up (Opcional)
 # ─────────────────────────────────────────────
 if ($All -or $WarmUp) {
-    Write-Host "[1/4] Configurando Ollama keep-alive..." -ForegroundColor Cyan
+    Write-Host "[1/3] Configurando Ollama keep-alive (LLM local)..." -ForegroundColor Cyan
 
     $currentKeepAlive = [System.Environment]::GetEnvironmentVariable("OLLAMA_KEEP_ALIVE", "User")
     if ($currentKeepAlive -ne "-1") {
@@ -68,143 +64,76 @@ if ($All -or $WarmUp) {
         Write-Host "  OLLAMA_KEEP_ALIVE já configurado" -ForegroundColor Gray
     }
 
-    Write-Host "  Aquecendo modelo de embeddings..."
-    $body = @{ model = "nomic-embed-text"; prompt = "warmup query for model initialization" } | ConvertTo-Json
+    # Verificar se Ollama está rodando
     try {
-        $stopwatch = [System.Diagnostics.Stopwatch]::StartNew()
-        Invoke-RestMethod -Uri "http://localhost:11434/api/embeddings" -Method Post -Body $body -ContentType "application/json" -TimeoutSec 30 | Out-Null
-        $stopwatch.Stop()
-        $elapsed = $stopwatch.ElapsedMilliseconds
-        Write-Host "  OK - Modelo carregado em ${elapsed}ms" -ForegroundColor Green
+        $response = Invoke-WebRequest -Uri "http://localhost:11434/api/tags" -Method GET -TimeoutSec 3 -ErrorAction Stop
+        $models = ($response.Content | ConvertFrom-Json).models
+        Write-Host "  Ollama ativo com $($models.Count) modelo(s)" -ForegroundColor Green
     } catch {
-        Write-Host "  AVISO - Ollama não está rodando. Inicie com 'ollama serve'" -ForegroundColor Yellow
+        Write-Host "  AVISO - Ollama não está rodando (opcional, apenas para LLM local)" -ForegroundColor DarkGray
     }
     Write-Host ""
 }
 
 # ─────────────────────────────────────────────
-# ETAPA 2: Índices LanceDB
+# ETAPA 2: Verificar Knowledge Graph
 # ─────────────────────────────────────────────
-if ($All -or $CreateIndexes) {
-    Write-Host "[2/4] Criando índices no LanceDB..." -ForegroundColor Cyan
+if ($All -or $VerifyGraph) {
+    Write-Host "[2/3] Verificando knowledge graph (codebase-memory-mcp)..." -ForegroundColor Cyan
 
-    if (-not (Test-Path $dbPath)) {
-        Write-Host "  SKIP - Banco não encontrado em $dbPath" -ForegroundColor Yellow
-        Write-Host "  Execute index-workspace.ps1 primeiro." -ForegroundColor Yellow
+    $cbmBin = Get-Command codebase-memory-mcp -ErrorAction SilentlyContinue
+    if (-not $cbmBin) {
+        $cbmPath = "$env:LOCALAPPDATA\Programs\codebase-memory-mcp\codebase-memory-mcp.exe"
+        if (Test-Path $cbmPath) {
+            $cbmBin = $cbmPath
+        }
     } else {
-        $pythonScript = @"
-import lancedb
-import math
-import sys
-
-db_path = r'$dbPath'
-try:
-    db = lancedb.connect(db_path)
-    table = db.open_table('code_chunks')
-    row_count = table.count_rows()
-    print(f'  Tabela: {row_count:,} chunks indexados')
-
-    # Indice vetorial
-    if row_count > 100000:
-        print('  Criando indice vetorial IVF_PQ...')
-        num_partitions = min(int(math.sqrt(row_count)), 512)
-        table.create_index(
-            metric='cosine',
-            num_partitions=num_partitions,
-            num_sub_vectors=48,
-            index_type='IVF_PQ',
-            replace=True
-        )
-        print(f'  OK - Indice vetorial criado ({num_partitions} particoes)')
-    else:
-        print(f'  SKIP - {row_count:,} chunks < 100K, brute-force e suficiente')
-
-    # Indices escalares
-    print('  Criando indices escalares...')
-    columns = [col for col in table.schema.names if col != 'vector']
-    created = 0
-    for col in ['file_path', 'repository', 'language']:
-        if col in columns:
-            try:
-                idx_type = 'BITMAP' if col == 'language' else 'BTREE'
-                table.create_index(col, index_type=idx_type, replace=True)
-                created += 1
-            except Exception as e:
-                print(f'  AVISO - Indice {col}: {e}')
-    print(f'  OK - {created} indices escalares criados')
-
-except FileNotFoundError:
-    print('  SKIP - Tabela code_chunks nao encontrada.')
-except Exception as e:
-    print(f'  ERRO - {e}')
-    sys.exit(1)
-"@
-        $pythonScript | python -
+        $cbmBin = $cbmBin.Source
     }
-    Write-Host ""
-}
 
-# ─────────────────────────────────────────────
-# ETAPA 3: Compactação LanceDB
-# ─────────────────────────────────────────────
-if ($All -or $Compact) {
-    Write-Host "[3/4] Compactando LanceDB..." -ForegroundColor Cyan
+    if ($cbmBin) {
+        $version = & $cbmBin --version 2>&1
+        Write-Host "  Versão: $version" -ForegroundColor Green
 
-    if (-not (Test-Path $dbPath)) {
-        Write-Host "  SKIP - Banco não encontrado em $dbPath" -ForegroundColor Yellow
+        # Verificar se há índice no diretório atual
+        $graphPath = ".codebase-memory"
+        if (Test-Path $graphPath) {
+            $graphSize = (Get-ChildItem $graphPath -Recurse | Measure-Object -Property Length -Sum).Sum
+            $graphSizeMB = [math]::Round($graphSize / 1MB, 2)
+            Write-Host "  Knowledge graph: $graphSizeMB MB" -ForegroundColor Green
+        } else {
+            Write-Host "  Knowledge graph: Nao indexado neste diretório" -ForegroundColor Yellow
+            Write-Host "  Execute: codebase-memory-mcp index" -ForegroundColor DarkGray
+        }
     } else {
-        $pythonScript = @"
-import lancedb
-from datetime import timedelta
-
-db_path = r'$dbPath'
-try:
-    db = lancedb.connect(db_path)
-    table = db.open_table('code_chunks')
-
-    before_fragments = len(table.to_lance().get_fragments())
-    table.optimize(cleanup_older_than=timedelta(days=7))
-    after_fragments = len(table.to_lance().get_fragments())
-
-    reduced = before_fragments - after_fragments
-    if reduced > 0:
-        print(f'  OK - Compactacao: {before_fragments} -> {after_fragments} fragmentos (-{reduced})')
-    else:
-        print(f'  OK - Banco ja otimizado ({after_fragments} fragmentos)')
-
-except FileNotFoundError:
-    print('  SKIP - Tabela code_chunks nao encontrada.')
-except Exception as e:
-    print(f'  AVISO - {e}')
-"@
-        $pythonScript | python -
+        Write-Host "  FALHA - codebase-memory-mcp nao encontrado" -ForegroundColor Red
+        Write-Host "  Execute: .\scripts\setup-codebase-memory.ps1" -ForegroundColor Yellow
     }
     Write-Host ""
 }
 
 # ─────────────────────────────────────────────
-# ETAPA 4: Resumo Final
+# ETAPA 3: Resumo Final
 # ─────────────────────────────────────────────
-Write-Host "[4/4] Estado do ambiente..." -ForegroundColor Cyan
+Write-Host "[3/3] Estado do ambiente..." -ForegroundColor Cyan
 Write-Host ""
 
 $keepAlive = [System.Environment]::GetEnvironmentVariable("OLLAMA_KEEP_ALIVE", "User")
 $ollamaStatus = if ($keepAlive -eq "-1") { "Permanente (-1)" } else { "Padrão (5min)" }
 
-Write-Host "  ┌─────────────────────────────────────────────┐"
-Write-Host "  │ Ollama keep-alive:  $ollamaStatus"
-Write-Host "  │ LanceDB path:       $dbPath"
-if (Test-Path $dbPath) {
-    Write-Host "  │ LanceDB status:     Disponível" -ForegroundColor Green
-} else {
-    Write-Host "  │ LanceDB status:     Não inicializado" -ForegroundColor Yellow
-}
-Write-Host "  └─────────────────────────────────────────────┘"
+Write-Host "  ┌─────────────────────────────────────────────────────────────┐"
+Write-Host "  │ Code Intelligence:  codebase-memory-mcp (knowledge graph)"
+Write-Host "  │ Navegação LSP:      Serena MCP"
+Write-Host "  │ Ollama keep-alive:  $ollamaStatus (opcional, LLM local)"
+Write-Host "  └─────────────────────────────────────────────────────────────┘"
 Write-Host ""
 Write-Host "Otimização concluída!" -ForegroundColor Green
 Write-Host ""
+Write-Host "Nota: O codebase-memory-mcp é auto-otimizado (SQLite WAL, auto-vacuum)." -ForegroundColor DarkGray
+Write-Host "      Não requer otimização manual de índices ou compactação." -ForegroundColor DarkGray
+Write-Host ""
 Write-Host "Próximos passos:" -ForegroundColor Yellow
-Write-Host "  1. Reinicie o Ollama para aplicar keep-alive (se alterado)"
-Write-Host "  2. Abra os projetos principais no IntelliJ (warm-up LSP)"
-Write-Host "  3. Verifique saúde: .\scripts\health-check.ps1"
+Write-Host "  1. Verifique saúde: .\scripts\health-check.ps1"
+Write-Host "  2. Indexe o workspace: .\scripts\index-workspace.ps1"
+Write-Host "  3. Abra os projetos no IntelliJ e use o Copilot Agent Mode"
 Write-Host ""

@@ -3,9 +3,12 @@
 Script de configuração alternativa usando codebase-rag (Node.js/Bun).
 
 .DESCRIPTION
-Esta alternativa utiliza o projeto codebase-rag (baseado em Bun/Node.js) que não requer
+[LEGADO] Esta alternativa utiliza o projeto codebase-rag (baseado em Bun/Node.js) que não requer
 Ollama para embeddings (usa o modelo ONNX all-MiniLM-L6-v2 embutido).
-Ideal para máquinas com recursos mais limitados ou quando não se deseja instalar o Ollama.
+
+NOTA: Esta abordagem foi substituída pelo codebase-memory-mcp (setup-codebase-memory.ps1),
+que é mais completo, mais simples e não requer Node.js. Use este script apenas se
+necessitar especificamente do codebase-rag por algum motivo de compatibilidade.
 
 Requisitos:
 - Node.js 18+ (pode ser instalado via nvm-windows sem admin)

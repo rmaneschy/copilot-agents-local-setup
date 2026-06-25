@@ -17,8 +17,8 @@ Requisitos:
 - Nenhum privilégio de administrador necessário
 
 .PARAMETER Server
-Nome do servidor MCP a inspecionar. Valores aceitos: 'vector-search', 'serena', 'custom'.
-Padrão: 'vector-search'.
+Nome do servidor MCP a inspecionar. Valores aceitos: 'codebase-memory', 'serena', 'custom'.
+Padrão: 'codebase-memory'.
 
 .PARAMETER CustomCommand
 Comando customizado para iniciar um servidor MCP não listado. Usado quando Server = 'custom'.
@@ -28,7 +28,7 @@ Porta do cliente web do Inspector. Padrão: 6274.
 
 .EXAMPLE
 .\setup-mcp-inspector.ps1
-# Inspeciona o mcp-vector-search (padrão)
+# Inspeciona o codebase-memory-mcp (padrão)
 
 .EXAMPLE
 .\setup-mcp-inspector.ps1 -Server serena
@@ -40,8 +40,8 @@ Porta do cliente web do Inspector. Padrão: 6274.
 #>
 
 param(
-    [ValidateSet("vector-search", "serena", "custom")]
-    [string]$Server = "vector-search",
+    [ValidateSet("codebase-memory", "serena", "custom")]
+    [string]$Server = "codebase-memory",
     [string]$CustomCommand = "",
     [int]$Port = 6274
 )
@@ -49,8 +49,6 @@ param(
 $ErrorActionPreference = "Stop"
 
 $ToolsDir = "$HOME\local-tools"
-$PythonVenvDir = "$ToolsDir\mcp-venv"
-$SerenaDir = "$ToolsDir\serena"
 
 Write-Host ""
 Write-Host "╔══════════════════════════════════════════════════════════════╗" -ForegroundColor Cyan
@@ -103,38 +101,31 @@ Write-Host "[2/3] Resolvendo servidor MCP '$Server'..." -NoNewline
 $inspectorArgs = @()
 
 switch ($Server) {
-    "vector-search" {
-        # mcp-vector-search instalado no venv Python
-        $mcpBinary = "$PythonVenvDir\Scripts\mcp-vector-search.exe"
-        if (-not (Test-Path $mcpBinary)) {
-            # Fallback: tentar via python -m
-            $mcpBinary = "$PythonVenvDir\Scripts\python.exe"
-            $inspectorArgs = @($mcpBinary, "-m", "mcp_vector_search")
+    "codebase-memory" {
+        # codebase-memory-mcp (binário estático no PATH ou em LOCALAPPDATA)
+        $cbmBin = Get-Command codebase-memory-mcp -ErrorAction SilentlyContinue
+        if ($cbmBin) {
+            $inspectorArgs = @($cbmBin.Source)
         } else {
-            $inspectorArgs = @($mcpBinary)
+            $cbmPath = "$env:LOCALAPPDATA\Programs\codebase-memory-mcp\codebase-memory-mcp.exe"
+            if (Test-Path $cbmPath) {
+                $inspectorArgs = @($cbmPath)
+            } else {
+                Write-Host " FALHA" -ForegroundColor Red
+                Write-Host ""
+                Write-Host "  codebase-memory-mcp nao encontrado. Execute primeiro:" -ForegroundColor Yellow
+                Write-Host "    .\scripts\setup-codebase-memory.ps1" -ForegroundColor White
+                Write-Host ""
+                exit 1
+            }
         }
-
-        if (-not (Test-Path $PythonVenvDir)) {
-            Write-Host " FALHA" -ForegroundColor Red
-            Write-Host ""
-            Write-Host "  mcp-vector-search nao encontrado. Execute primeiro:" -ForegroundColor Yellow
-            Write-Host "    .\scripts\setup.ps1" -ForegroundColor White
-            Write-Host ""
-            exit 1
-        }
-        Write-Host " OK (mcp-vector-search)" -ForegroundColor Green
+        Write-Host " OK (codebase-memory-mcp)" -ForegroundColor Green
     }
     "serena" {
-        $serenaBinary = "$SerenaDir\serena.exe"
-        if (-not (Test-Path $serenaBinary)) {
-            # Fallback: tentar npx
-            $serenaBinary = "npx"
-            $inspectorArgs = @($serenaBinary, "@anthropic/serena")
+        $serenaBin = Get-Command serena -ErrorAction SilentlyContinue
+        if ($serenaBin) {
+            $inspectorArgs = @($serenaBin.Source, "start-mcp-server", "--context=jb-copilot-plugin")
         } else {
-            $inspectorArgs = @($serenaBinary)
-        }
-
-        if (-not (Test-Path $SerenaDir) -and -not (Get-Command npx -ErrorAction SilentlyContinue)) {
             Write-Host " FALHA" -ForegroundColor Red
             Write-Host ""
             Write-Host "  Serena nao encontrado. Execute primeiro:" -ForegroundColor Yellow

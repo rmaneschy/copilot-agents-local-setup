@@ -3,51 +3,81 @@
 Script para indexar (ou re-indexar) todo o código-fonte do diretório ~/workspace.
 
 .DESCRIPTION
-Este script invoca o mcp-vector-search para realizar a indexação completa do workspace.
+Este script invoca o codebase-memory-mcp para realizar a indexação completa do workspace.
 Ele deve ser executado periodicamente ou após alterações significativas no código-fonte.
-O script verifica se o Ollama está rodando e se o ambiente virtual está configurado.
+O codebase-memory-mcp mantém auto-sync via git-based change detection, mas este script
+permite forçar uma re-indexação completa quando necessário.
 
 .PARAMETER Path
 Caminho do workspace a ser indexado. Padrão: $HOME\workspace.
 
-.PARAMETER Extensions
-Extensões de arquivo a serem indexadas. Padrão: .java,.kt,.py,.ts,.js,.go,.yaml,.yml,.xml,.json,.properties,.gradle,.proto,.graphql
+.PARAMETER Force
+Força re-indexação completa (ignora cache incremental).
+
+.EXAMPLE
+.\index-workspace.ps1
+# Indexa o workspace padrão (~\workspace)
+
+.EXAMPLE
+.\index-workspace.ps1 -Path "C:\projetos\meu-servico"
+# Indexa um diretório específico
+
+.EXAMPLE
+.\index-workspace.ps1 -Force
+# Força re-indexação completa ignorando cache
 #>
 
 param(
     [string]$Path = "$HOME\workspace",
-    [string]$Extensions = ".java,.kt,.py,.ts,.js,.go,.yaml,.yml,.xml,.json,.properties,.gradle,.proto,.graphql"
+    [switch]$Force
 )
 
 $ErrorActionPreference = "Stop"
 
-$ToolsDir = "$HOME\local-tools"
-$PythonVenvDir = "$ToolsDir\mcp-venv"
-$MvsBin = "$PythonVenvDir\Scripts\mcp-vector-search.exe"
-
-Write-Host "=== Indexação do Workspace ===" -ForegroundColor Cyan
+Write-Host "=== Indexação do Workspace (codebase-memory-mcp) ===" -ForegroundColor Cyan
 Write-Host "Diretório alvo: $Path"
-Write-Host "Extensões: $Extensions"
 
-# Verificar pré-requisitos
-if (!(Test-Path $MvsBin)) {
-    Write-Host "ERRO: mcp-vector-search não encontrado. Execute setup.ps1 primeiro." -ForegroundColor Red
+# Verificar codebase-memory-mcp
+$cbmBin = Get-Command codebase-memory-mcp -ErrorAction SilentlyContinue
+if (-not $cbmBin) {
+    $cbmPath = "$env:LOCALAPPDATA\Programs\codebase-memory-mcp\codebase-memory-mcp.exe"
+    if (Test-Path $cbmPath) {
+        $cbmBin = $cbmPath
+    } else {
+        Write-Host "ERRO: codebase-memory-mcp nao encontrado. Execute setup-codebase-memory.ps1 primeiro." -ForegroundColor Red
+        exit 1
+    }
+} else {
+    $cbmBin = $cbmBin.Source
+}
+
+# Verificar se o diretório existe
+if (!(Test-Path $Path)) {
+    Write-Host "ERRO: Diretório '$Path' nao encontrado." -ForegroundColor Red
     exit 1
 }
 
-# Verificar se Ollama está rodando
-try {
-    $response = Invoke-WebRequest -Uri "http://localhost:11434/api/tags" -Method GET -TimeoutSec 5 -ErrorAction Stop
-    Write-Host "Ollama está rodando." -ForegroundColor Green
-} catch {
-    Write-Host "Ollama não está respondendo. Tentando iniciar..."
-    Start-Process -FilePath "ollama" -ArgumentList "serve" -WindowStyle Hidden
-    Start-Sleep -Seconds 5
+# Executar indexação
+Write-Host ""
+Write-Host "Iniciando indexação... Isso pode levar alguns minutos dependendo do tamanho do workspace." -ForegroundColor Yellow
+
+$indexArgs = @("index")
+if ($Force) {
+    $indexArgs += "--force"
+    Write-Host "Modo: Re-indexação completa (--force)" -ForegroundColor Yellow
+} else {
+    Write-Host "Modo: Incremental (apenas alterações desde último index)" -ForegroundColor Green
 }
 
-# Executar indexação
-Write-Host "Iniciando indexação... Isso pode levar alguns minutos dependendo do tamanho do workspace." -ForegroundColor Yellow
-& $MvsBin index --extensions $Extensions $Path
-
-Write-Host "Indexação concluída com sucesso!" -ForegroundColor Green
-Write-Host "O servidor MCP já pode responder consultas sobre o código indexado." -ForegroundColor Cyan
+Push-Location $Path
+try {
+    & $cbmBin @indexArgs
+    Write-Host ""
+    Write-Host "Indexação concluída com sucesso!" -ForegroundColor Green
+    Write-Host "O servidor MCP já pode responder consultas sobre o código indexado." -ForegroundColor Cyan
+    Write-Host ""
+    Write-Host "Dica: O codebase-memory-mcp mantém auto-sync via git." -ForegroundColor DarkGray
+    Write-Host "      Este script só é necessário para a indexação inicial ou re-indexação forçada." -ForegroundColor DarkGray
+} finally {
+    Pop-Location
+}

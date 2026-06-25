@@ -111,14 +111,10 @@ if ($Disable) {
 {
   "inputs": [],
   "servers": {
-    "local-code-rag": {
-      "command": "${userHome}/local-tools/mcp-venv/Scripts/python.exe",
-      "args": ["-m", "mcp_vector_search.mcp.server", "${userHome}/workspace"],
-      "env": {
-        "MCP_ENABLE_FILE_WATCHING": "true",
-        "EMBEDDING_MODEL": "nomic-embed-text",
-        "OLLAMA_BASE_URL": "http://localhost:11434"
-      }
+    "codebase-memory": {
+      "type": "stdio",
+      "command": "codebase-memory-mcp",
+      "args": []
     },
     "serena": {
       "command": "serena",
