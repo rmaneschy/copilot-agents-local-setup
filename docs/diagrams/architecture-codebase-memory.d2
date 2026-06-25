@@ -1,0 +1,348 @@
+# Diagrama de Arquitetura: Code Intelligence Local
+# GitHub Copilot Agent Mode + codebase-memory-mcp + Serena MCP
+
+direction: right
+
+title: {
+  label: "Arquitetura: Code Intelligence Local com codebase-memory-mcp"
+  near: top-center
+  shape: text
+  style: {
+    font-size: 24
+    bold: true
+  }
+}
+
+# ═══════════════════════════════════════════════════════════════
+# Camada do Desenvolvedor
+# ═══════════════════════════════════════════════════════════════
+developer: {
+  label: "Desenvolvedor"
+  shape: person
+  style: {
+    fill: "#E3F2FD"
+    stroke: "#1565C0"
+  }
+}
+
+ide: {
+  label: "IntelliJ IDEA / VS Code"
+  icon: https://cdn.simpleicons.org/intellijidea
+  style: {
+    fill: "#F3E5F5"
+    stroke: "#6A1B9A"
+    border-radius: 8
+  }
+
+  copilot: {
+    label: "GitHub Copilot\nAgent Mode"
+    style: {
+      fill: "#E8F5E9"
+      stroke: "#2E7D32"
+      border-radius: 8
+      font-size: 14
+      bold: true
+    }
+  }
+}
+
+developer -> ide.copilot: "Prompt em\nlinguagem natural" {
+  style: {
+    stroke: "#1565C0"
+    font-size: 12
+  }
+}
+
+# ═══════════════════════════════════════════════════════════════
+# Camada MCP (Model Context Protocol)
+# ═══════════════════════════════════════════════════════════════
+mcp_layer: {
+  label: "Camada MCP (stdio)"
+  style: {
+    fill: "#FFF8E1"
+    stroke: "#F57F17"
+    border-radius: 12
+  }
+
+  codebase_memory: {
+    label: "codebase-memory-mcp"
+    style: {
+      fill: "#E8F5E9"
+      stroke: "#2E7D32"
+      border-radius: 8
+      bold: true
+    }
+
+    tools: {
+      label: "14 Tools MCP"
+      style: {
+        fill: "#C8E6C9"
+        stroke: "#388E3C"
+        border-radius: 4
+        font-size: 12
+      }
+
+      semantic: {
+        label: "semantic_query\nfuzzy_find"
+        shape: rectangle
+        style: {
+          fill: "#A5D6A7"
+          font-size: 11
+        }
+      }
+
+      structural: {
+        label: "trace_call_path\nget_architecture"
+        shape: rectangle
+        style: {
+          fill: "#A5D6A7"
+          font-size: 11
+        }
+      }
+
+      impact: {
+        label: "detect_changes\nimpact_analysis"
+        shape: rectangle
+        style: {
+          fill: "#A5D6A7"
+          font-size: 11
+        }
+      }
+
+      cross: {
+        label: "cross_service_trace\ncypher_query"
+        shape: rectangle
+        style: {
+          fill: "#A5D6A7"
+          font-size: 11
+        }
+      }
+    }
+  }
+
+  serena: {
+    label: "Serena MCP"
+    style: {
+      fill: "#E3F2FD"
+      stroke: "#1565C0"
+      border-radius: 8
+      bold: true
+    }
+
+    tools_serena: {
+      label: "Tools LSP"
+      style: {
+        fill: "#BBDEFB"
+        stroke: "#1976D2"
+        border-radius: 4
+        font-size: 12
+      }
+
+      find_symbol: {
+        label: "find_symbol\nget_references"
+        shape: rectangle
+        style: {
+          fill: "#90CAF9"
+          font-size: 11
+        }
+      }
+
+      implementations: {
+        label: "get_implementations\nget_diagnostics"
+        shape: rectangle
+        style: {
+          fill: "#90CAF9"
+          font-size: 11
+        }
+      }
+
+      edit: {
+        label: "apply_edit\nrename_symbol"
+        shape: rectangle
+        style: {
+          fill: "#90CAF9"
+          font-size: 11
+        }
+      }
+    }
+  }
+}
+
+ide.copilot -> mcp_layer.codebase_memory: "stdio" {
+  style: {
+    stroke: "#2E7D32"
+    stroke-width: 2
+  }
+}
+
+ide.copilot -> mcp_layer.serena: "stdio" {
+  style: {
+    stroke: "#1565C0"
+    stroke-width: 2
+  }
+}
+
+# ═══════════════════════════════════════════════════════════════
+# Camada de Dados (Local)
+# ═══════════════════════════════════════════════════════════════
+data_layer: {
+  label: "Armazenamento Local"
+  style: {
+    fill: "#EFEBE9"
+    stroke: "#4E342E"
+    border-radius: 12
+  }
+
+  knowledge_graph: {
+    label: "Knowledge Graph\n(SQLite WAL)"
+    shape: cylinder
+    style: {
+      fill: "#D7CCC8"
+      stroke: "#5D4037"
+      font-size: 13
+    }
+  }
+
+  embedding: {
+    label: "Embedding Index\n(nomic-embed-code)\nCompilado no binário"
+    shape: cylinder
+    style: {
+      fill: "#D7CCC8"
+      stroke: "#5D4037"
+      font-size: 12
+    }
+  }
+
+  lsp_index: {
+    label: "LSP Index\n(Language Servers)"
+    shape: cylinder
+    style: {
+      fill: "#BBDEFB"
+      stroke: "#1565C0"
+      font-size: 12
+    }
+  }
+}
+
+mcp_layer.codebase_memory -> data_layer.knowledge_graph: "read/write" {
+  style: {
+    stroke: "#5D4037"
+    stroke-dash: 3
+  }
+}
+
+mcp_layer.codebase_memory -> data_layer.embedding: "query" {
+  style: {
+    stroke: "#5D4037"
+    stroke-dash: 3
+  }
+}
+
+mcp_layer.serena -> data_layer.lsp_index: "LSP protocol" {
+  style: {
+    stroke: "#1565C0"
+    stroke-dash: 3
+  }
+}
+
+# ═══════════════════════════════════════════════════════════════
+# Código-fonte (Workspace)
+# ═══════════════════════════════════════════════════════════════
+workspace: {
+  label: "Workspace (Código-fonte)"
+  style: {
+    fill: "#F3E5F5"
+    stroke: "#6A1B9A"
+    border-radius: 12
+  }
+
+  repos: {
+    label: "Repositórios Git"
+    style: {
+      fill: "#E1BEE7"
+      stroke: "#7B1FA2"
+      border-radius: 4
+    }
+
+    java: {
+      label: ".java .kt"
+      shape: page
+      style: { font-size: 11 }
+    }
+    ts: {
+      label: ".ts .js"
+      shape: page
+      style: { font-size: 11 }
+    }
+    py: {
+      label: ".py .go"
+      shape: page
+      style: { font-size: 11 }
+    }
+    config: {
+      label: ".yaml .proto\n.graphql"
+      shape: page
+      style: { font-size: 11 }
+    }
+    infra: {
+      label: "Dockerfile\nK8s manifests"
+      shape: page
+      style: { font-size: 11 }
+    }
+  }
+}
+
+data_layer.knowledge_graph -> workspace.repos: "git-based\nchange detection" {
+  style: {
+    stroke: "#6A1B9A"
+    stroke-dash: 3
+  }
+}
+
+data_layer.lsp_index -> workspace.repos: "file watching" {
+  style: {
+    stroke: "#6A1B9A"
+    stroke-dash: 3
+  }
+}
+
+# ═══════════════════════════════════════════════════════════════
+# Ollama (Opcional)
+# ═══════════════════════════════════════════════════════════════
+ollama: {
+  label: "Ollama (Opcional)\nLLM Local para chat"
+  style: {
+    fill: "#ECEFF1"
+    stroke: "#546E7A"
+    border-radius: 8
+    stroke-dash: 3
+    font-size: 12
+  }
+}
+
+ide.copilot -> ollama: "HTTP (opcional)\nModelo local" {
+  style: {
+    stroke: "#546E7A"
+    stroke-dash: 5
+    font-size: 11
+  }
+}
+
+# ═══════════════════════════════════════════════════════════════
+# Notas
+# ═══════════════════════════════════════════════════════════════
+notes: {
+  label: |md
+    **Características da Arquitetura:**
+    - 100% offline (zero dependências externas)
+    - Binário estático único (~15MB)
+    - 158 linguagens (tree-sitter vendored)
+    - Auto-sync via git change detection
+    - Cross-service: HTTP, gRPC, GraphQL, pub-sub
+  |
+  near: bottom-center
+  shape: text
+  style: {
+    font-size: 12
+  }
+}

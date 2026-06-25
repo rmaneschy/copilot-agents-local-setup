@@ -2,6 +2,8 @@
 
 ## Visão Geral
 
+![Diagrama de Arquitetura](diagrams/architecture-codebase-memory.png)
+
 A solução implementa um sistema de **code intelligence** 100% local, baseado em knowledge graph, que se integra nativamente ao IntelliJ IDEA através do GitHub Copilot Chat usando o Model Context Protocol (MCP). A arquitetura foi desenhada especificamente para ambientes restritos: Windows 11 sem privilégios de administrador e sem Docker.
 
 A abordagem evoluiu de um sistema de RAG vetorial (mcp-vector-search + Ollama + LanceDB) para um **knowledge graph persistente** (codebase-memory-mcp), que combina busca semântica, análise estrutural e cross-service linking em um único binário estático sem dependências.
