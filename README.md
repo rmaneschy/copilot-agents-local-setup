@@ -236,11 +236,12 @@ task start-phoenix
 ### Cenário B: Novo repositório adicionado ao workspace
 
 ```bash
-# Indexar apenas o novo repositório (Windows)
-.\scripts\index-workspace.ps1 -Include "nome-do-novo-repo"
+# Via Taskfile (detecta OS automaticamente)
+task index-repo -- nome-do-novo-repo
 
-# Indexar apenas o novo repositório (Linux)
-./scripts/index-workspace.sh --include "nome-do-novo-repo"
+# Ou diretamente:
+# Windows: .\scripts\index-workspace.ps1 -Include "nome-do-novo-repo"
+# Linux:   ./scripts/index-workspace.sh --include "nome-do-novo-repo"
 ```
 
 ### Cenário C: Atualização dos componentes
@@ -428,6 +429,7 @@ Para um aprofundamento técnico, consulte o documento de [Arquitetura da Soluç�
 
 ```text
 Taskfile.yml                             # Orquestrador unificado (go-task, detecta OS, chama .ps1 ou .sh)
+.gitattributes                           # Controle de line endings (CRLF para .ps1, LF para .sh/.yml/.md)
 
 .github/
 ├── agents/                              # Agentes especializados para uso com MCP
@@ -543,11 +545,13 @@ task check
 ### Dashboard de Desempenho
 
 ```bash
-# Habilitar monitoramento com Phoenix (Windows)
-.\scripts\toggle-monitoring.ps1 -Enable -Phoenix
+# Habilitar monitoramento com Phoenix
+task enable-monitoring
 
 # Gerar dashboard HTML (Windows)
 .\scripts\generate-dashboard.ps1
+
+# Linux: abrir Phoenix UI diretamente em http://localhost:6006
 ```
 
 ---
@@ -557,11 +561,12 @@ task check
 ### MCP Inspector (Debug Visual de Servidores)
 
 ```bash
-# Inspecionar o codebase-memory-mcp (padrão)
+# Windows
 .\scripts\setup-mcp-inspector.ps1
-
-# Inspecionar o Serena MCP
 .\scripts\setup-mcp-inspector.ps1 -Server serena
+
+# Linux
+task inspect
 ```
 
 A interface estará disponível em `http://localhost:6274`.
@@ -569,8 +574,11 @@ A interface estará disponível em `http://localhost:6274`.
 ### n8n (Orquestrador Visual de Agentes)
 
 ```bash
-# Instalar e iniciar o n8n
+# Windows
 .\scripts\setup-n8n.ps1 -Start
+
+# Linux (requer Node.js)
+npx n8n start
 ```
 
 A interface estará disponível em `http://localhost:5678`.
