@@ -70,6 +70,7 @@ O script legado `setup-vector-search.ps1` permanece disponível para cenários d
 scripts/                                 # Automação de Setup (PowerShell)
 ├── setup.ps1                            # Setup completo (detecção de hardware + componentes)
 ├── setup-codebase-memory.ps1            # [RECOMENDADO] Setup plug-and-play do codebase-memory-mcp
+├── setup-phoenix.ps1                    # [NOVO] Setup Arize Phoenix (observabilidade de agentes)
 ├── setup-vector-search.ps1              # [LEGADO] Setup do mcp-vector-search v4 (RAG vetorial)
 ├── apply-ollama-tweaks.ps1              # Aplica/troca tweaks do Ollama por perfil de hardware
 ├── setup-serena.ps1                     # Setup Serena MCP (uv + LSP)
@@ -85,11 +86,12 @@ scripts/                                 # Automação de Setup (PowerShell)
 └── generate-dashboard.ps1               # Gerar dashboard HTML de desempenho
 
 monitoring/
-└── mcp-proxy-logger.py                  # Proxy transparente para logging JSON-RPC
+└── mcp-proxy-logger.py                  # Proxy transparente para logging JSON-RPC + export OTEL
 
 docs/                                    # Documentação técnica da infraestrutura
 ├── architecture.md                      # Arquitetura detalhada da solução
 ├── comparativo-alternativas.md          # Comparação com Sourcebot, Continue.dev, Greptile
+├── guia-observabilidade-phoenix.md      # Guia completo do Arize Phoenix (traces, logs, recursos)
 ├── ollama-tweaks-e-perfis-hardware.md   # Tweaks do Ollama, KV Cache e perfis de hardware
 └── concepts/
     └── spec-driven-development-frameworks.md  # Comparativo SDD (SpecKit, Superpowers, OpenSpec)
@@ -295,13 +297,33 @@ Para verificar rapidamente quais servidores MCP estão disponíveis e seus biná
 
 ---
 
-## Monitoramento e Dashboard
+## Monitoramento e Observabilidade
 
-O projeto inclui ferramentas completas para monitorar a saúde do sistema e o desempenho dos agentes.
+O projeto inclui ferramentas completas para monitorar a saúde do sistema, o desempenho dos agentes e o fluxo de decisões via traces.
+
+### Arize Phoenix (Observabilidade de Agentes)
+
+O **Arize Phoenix** é a plataforma open-source de observabilidade que permite visualizar o fluxo completo de decisões dos agentes — quais tools foram chamadas, em que ordem, quanto tempo levaram e se houve erros. Funciona 100% local via `pip install`, sem Docker ou admin.
+
+```powershell
+# Instalar Phoenix
+.\scripts\setup-phoenix.ps1
+
+# Instalar e iniciar (modo air-gapped para corporativo)
+.\scripts\setup-phoenix.ps1 -Start -AirGapped
+
+# Verificar status
+.\scripts\setup-phoenix.ps1 -Status
+
+# Parar
+.\scripts\setup-phoenix.ps1 -Stop
+```
+
+Acesse a UI em `http://localhost:6006` para visualizar traces em árvore, filtrar por latência/erro e analisar padrões de uso. Para detalhes completos, consulte o **[Guia de Observabilidade Phoenix](docs/guia-observabilidade-phoenix.md)**.
 
 ### Verificação de Saúde (Health Check)
 
-Para verificar se todos os componentes (codebase-memory-mcp, Serena, Ollama) estão rodando corretamente:
+Para verificar se todos os componentes (codebase-memory-mcp, Serena, Phoenix, Ollama) estão rodando corretamente:
 
 ```powershell
 .\scripts\health-check.ps1
@@ -309,15 +331,18 @@ Para verificar se todos os componentes (codebase-memory-mcp, Serena, Ollama) est
 
 ### Dashboard de Desempenho (MCP Proxy Logger)
 
-Você pode habilitar o monitoramento avançado para ver **exatamente quais ferramentas os agentes estão usando**, quanto tempo demoram e se há gargalos. O sistema intercepta as chamadas JSON-RPC de forma transparente e gera um dashboard visual em HTML.
+O monitoramento avançado intercepta chamadas JSON-RPC de forma transparente e pode operar em dois modos:
 
-**1. Habilitar o monitoramento:**
+- **Modo JSONL** (padrão): Registra em `~/.copilot-metrics/calls.jsonl` para análise offline
+- **Modo JSONL + Phoenix**: Exporta traces OTEL para o Phoenix (requer flag `--phoenix`)
+
+**1. Habilitar o monitoramento (com Phoenix):**
 ```powershell
-.\scripts\toggle-monitoring.ps1 -Enable
+.\scripts\toggle-monitoring.ps1 -Enable -Phoenix
 ```
 *(Reinicie o IntelliJ após habilitar)*
 
-**2. Gerar e visualizar o dashboard:**
+**2. Gerar e visualizar o dashboard HTML:**
 ```powershell
 .\scripts\generate-dashboard.ps1
 ```
