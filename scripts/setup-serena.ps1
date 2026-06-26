@@ -239,50 +239,94 @@ if ($useUv) {
     # ─────────────────────────────────────────────────────────────────────────
     Write-Host "    Tentativa 1: uv tool install com UV_LINK_MODE=copy..." -ForegroundColor DarkGray
 
+    # Temporariamente reduzir ErrorActionPreference para evitar NativeCommandError
+    # no PowerShell 5.1 (uv emite warnings/info no stderr)
+    $prevEAP = $ErrorActionPreference
+    $ErrorActionPreference = "Continue"
+
     try {
         $output = & uv tool install -p 3.13 serena-agent 2>&1
-        if ($LASTEXITCODE -eq 0) {
+        $uvExitCode = $LASTEXITCODE
+        $ErrorActionPreference = $prevEAP
+
+        if ($uvExitCode -eq 0) {
             Write-Host "    OK: Serena instalado com sucesso via uv!" -ForegroundColor Green
             $serenaInstalled = $true
         } else {
-            throw "Exit code: $LASTEXITCODE - $output"
+            $outputStr = $output -join "`n"
+            throw "Exit code: $uvExitCode - $outputStr"
         }
     }
     catch {
+        $ErrorActionPreference = $prevEAP
         $errorMsg = $_.Exception.Message
+        $outputStr = if ($output) { $output -join "`n" } else { $errorMsg }
 
         # Verificar se é o erro específico de trampoline/PE resources
-        if ($errorMsg -match "trampoline|PE resources|Access.+denied|Acesso.+negado") {
+        if ($outputStr -match "trampoline|PE resources|Access.+denied|Acesso.+negado") {
             Write-Host "    AVISO: Erro de trampoline/PE resources detectado." -ForegroundColor Yellow
             Write-Host "    Causa: Política de segurança corporativa bloqueia criação de .exe" -ForegroundColor Yellow
             Write-Host ""
 
             # ─────────────────────────────────────────────────────────────────
-            # Tentativa 2: uv com --python-preference managed-only
+            # Tentativa 2: uv com --python-preference system
             # ─────────────────────────────────────────────────────────────────
             Write-Host "    Tentativa 2: uv com Python do sistema (sem trampoline)..." -ForegroundColor DarkGray
 
+            $ErrorActionPreference = "Continue"
             try {
                 $output2 = & uv tool install -p 3.13 serena-agent --python-preference system 2>&1
-                if ($LASTEXITCODE -eq 0) {
+                $uv2ExitCode = $LASTEXITCODE
+                $ErrorActionPreference = $prevEAP
+
+                if ($uv2ExitCode -eq 0) {
                     Write-Host "    OK: Serena instalado via uv (Python do sistema)!" -ForegroundColor Green
                     $serenaInstalled = $true
                 } else {
-                    throw "Exit code: $LASTEXITCODE - $output2"
+                    throw "Exit code: $uv2ExitCode"
                 }
             }
             catch {
+                $ErrorActionPreference = $prevEAP
                 Write-Host "    Tentativa 2 falhou. Usando pipx como fallback..." -ForegroundColor Yellow
                 $useUv = $false
                 $installMethod = "pipx"
             }
         }
-        else {
-            # Pode ser erro de upgrade (já instalado)
-            Write-Host "    Tentando upgrade de instalação existente..." -ForegroundColor Gray
+        elseif ($outputStr -match "already installed|is already installed") {
+            # Já instalado — tentar upgrade
+            Write-Host "    Serena já instalado. Tentando upgrade..." -ForegroundColor Gray
+            $ErrorActionPreference = "Continue"
             try {
                 $upgradeOutput = & uv tool upgrade serena-agent 2>&1
-                if ($LASTEXITCODE -eq 0) {
+                $upgradeExitCode = $LASTEXITCODE
+                $ErrorActionPreference = $prevEAP
+
+                if ($upgradeExitCode -eq 0) {
+                    Write-Host "    OK: Serena atualizado com sucesso!" -ForegroundColor Green
+                    $serenaInstalled = $true
+                } else {
+                    # Já está na última versão
+                    Write-Host "    OK: Serena já está na versão mais recente." -ForegroundColor Green
+                    $serenaInstalled = $true
+                }
+            }
+            catch {
+                $ErrorActionPreference = $prevEAP
+                Write-Host "    OK: Serena já instalado (upgrade não necessário)." -ForegroundColor Green
+                $serenaInstalled = $true
+            }
+        }
+        else {
+            # Erro genérico — tentar upgrade antes de fallback
+            Write-Host "    Tentando upgrade de instalação existente..." -ForegroundColor Gray
+            $ErrorActionPreference = "Continue"
+            try {
+                $upgradeOutput = & uv tool upgrade serena-agent 2>&1
+                $upgradeExitCode = $LASTEXITCODE
+                $ErrorActionPreference = $prevEAP
+
+                if ($upgradeExitCode -eq 0) {
                     Write-Host "    OK: Serena atualizado com sucesso!" -ForegroundColor Green
                     $serenaInstalled = $true
                 } else {
@@ -290,6 +334,7 @@ if ($useUv) {
                 }
             }
             catch {
+                $ErrorActionPreference = $prevEAP
                 Write-Host "    AVISO: uv falhou. Usando pipx como fallback..." -ForegroundColor Yellow
                 $useUv = $false
                 $installMethod = "pipx"
@@ -312,9 +357,19 @@ if (-not $serenaInstalled) {
         $pythonCmd = Get-Command python -ErrorAction SilentlyContinue
         if (-not $pythonCmd) { $pythonCmd = Get-Command python3 -ErrorAction SilentlyContinue }
         if ($pythonCmd) {
-            & $pythonCmd.Source -m pip install --user pipx 2>&1 | Out-Null
-            & $pythonCmd.Source -m pipx ensurepath 2>&1 | Out-Null
-            $env:PATH = "$env:USERPROFILE\.local\bin;$env:PATH"
+            # Usar $ErrorActionPreference local para evitar NativeCommandError
+            # no PowerShell 5.1 (pip emite warnings no stderr)
+            $prevEAP = $ErrorActionPreference
+            $ErrorActionPreference = "Continue"
+            try {
+                $pipOutput = & $pythonCmd.Source -m pip install --user pipx 2>&1
+                $pipxPathOutput = & $pythonCmd.Source -m pipx ensurepath 2>&1
+            } catch {
+                # Ignorar erros de pip/pipx na instalação
+            } finally {
+                $ErrorActionPreference = $prevEAP
+            }
+            $env:PATH = "$env:USERPROFILE\.local\bin;$env:USERPROFILE\AppData\Roaming\Python\Python311\Scripts;$env:PATH"
         }
     }
 
