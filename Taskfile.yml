@@ -1,0 +1,285 @@
+# =============================================================================
+# Taskfile.yml — Orquestrador Unificado Multiplataforma
+# =============================================================================
+# Ponto de entrada único para todas as operações do ambiente de code intelligence.
+# Detecta automaticamente o sistema operacional e executa o script correto
+# (.ps1 no Windows, .sh no Linux/macOS).
+#
+# Instalação do go-task (binário único, sem admin):
+#   Windows: Invoke-WebRequest -Uri "https://github.com/go-task/task/releases/latest/download/task_windows_amd64.zip" -OutFile "$env:TEMP\task.zip"; Expand-Archive "$env:TEMP\task.zip" -DestinationPath "$env:USERPROFILE\.local\bin" -Force
+#   Linux:   sh -c "$(curl -fsSL https://taskfile.dev/install.sh)" -- -d ~/.local/bin
+#   macOS:   brew install go-task
+#
+# Uso:
+#   task --list         # Lista todos os comandos disponíveis
+#   task install        # Instala todos os componentes
+#   task check          # Verifica saúde do ambiente
+# =============================================================================
+
+version: '3'
+
+vars:
+  SCRIPTS_DIR: ./scripts
+
+tasks:
+  # ---------------------------------------------------------------------------
+  # Meta
+  # ---------------------------------------------------------------------------
+  default:
+    desc: Lista todos os comandos disponíveis
+    silent: true
+    cmds:
+      - task --list
+
+  # ---------------------------------------------------------------------------
+  # Instalação Completa
+  # ---------------------------------------------------------------------------
+  install:
+    desc: Instala todos os componentes (code-search + code-navigation + observability)
+    cmds:
+      - task: install-code-search
+      - task: install-code-navigation
+      - task: install-observability
+
+  setup:
+    desc: Instalação completa + indexação do workspace
+    cmds:
+      - task: install
+      - task: index
+
+  # ---------------------------------------------------------------------------
+  # Instalação Individual
+  # ---------------------------------------------------------------------------
+  install-code-search:
+    desc: Instala codebase-memory-mcp (knowledge graph + busca semântica)
+    cmds:
+      - cmd: powershell -ExecutionPolicy Bypass -File {{.SCRIPTS_DIR}}/setup-codebase-memory.ps1
+        platforms: [windows]
+      - cmd: '{{.SCRIPTS_DIR}}/setup-codebase-memory.sh'
+        platforms: [linux, darwin]
+
+  install-code-navigation:
+    desc: Instala Serena MCP (navegação LSP determinística)
+    cmds:
+      - cmd: powershell -ExecutionPolicy Bypass -File {{.SCRIPTS_DIR}}/setup-serena.ps1
+        platforms: [windows]
+      - cmd: '{{.SCRIPTS_DIR}}/setup-serena.sh'
+        platforms: [linux, darwin]
+
+  install-observability:
+    desc: Instala e inicia Arize Phoenix (observabilidade de agentes)
+    cmds:
+      - cmd: powershell -ExecutionPolicy Bypass -File {{.SCRIPTS_DIR}}/setup-phoenix.ps1 -Start -AirGapped
+        platforms: [windows]
+      - cmd: '{{.SCRIPTS_DIR}}/setup-phoenix.sh --start --air-gapped'
+        platforms: [linux, darwin]
+
+  # ---------------------------------------------------------------------------
+  # Indexação
+  # ---------------------------------------------------------------------------
+  index:
+    desc: Indexa workspace recursivamente (descobre repos via .git)
+    cmds:
+      - cmd: powershell -ExecutionPolicy Bypass -File {{.SCRIPTS_DIR}}/index-workspace.ps1
+        platforms: [windows]
+      - cmd: '{{.SCRIPTS_DIR}}/index-workspace.sh'
+        platforms: [linux, darwin]
+
+  index-repo:
+    desc: Indexa um repositório específico (uso: task index-repo -- nome-do-repo)
+    cmds:
+      - cmd: powershell -ExecutionPolicy Bypass -File {{.SCRIPTS_DIR}}/index-workspace.ps1 -Include "{{.CLI_ARGS}}"
+        platforms: [windows]
+      - cmd: '{{.SCRIPTS_DIR}}/index-workspace.sh --include "{{.CLI_ARGS}}"'
+        platforms: [linux, darwin]
+
+  # ---------------------------------------------------------------------------
+  # Verificação e Diagnóstico
+  # ---------------------------------------------------------------------------
+  check:
+    desc: Verifica saúde de todos os componentes
+    cmds:
+      - cmd: powershell -ExecutionPolicy Bypass -File {{.SCRIPTS_DIR}}/health-check.ps1
+        platforms: [windows]
+      - cmd: '{{.SCRIPTS_DIR}}/health-check.sh'
+        platforms: [linux, darwin]
+
+  inspect:
+    desc: Inspeciona servidores MCP (binários, versões, PATH)
+    cmds:
+      - cmd: powershell -ExecutionPolicy Bypass -File {{.SCRIPTS_DIR}}/inspect-mcp.ps1
+        platforms: [windows]
+      - cmd: echo "Executando health-check com detalhes..." && {{.SCRIPTS_DIR}}/health-check.sh --verbose
+        platforms: [linux, darwin]
+
+  # ---------------------------------------------------------------------------
+  # Phoenix (Observabilidade)
+  # ---------------------------------------------------------------------------
+  start-phoenix:
+    desc: Inicia o Arize Phoenix (localhost:6006)
+    cmds:
+      - cmd: powershell -ExecutionPolicy Bypass -File {{.SCRIPTS_DIR}}/setup-phoenix.ps1 -Start
+        platforms: [windows]
+      - cmd: '{{.SCRIPTS_DIR}}/setup-phoenix.sh --start'
+        platforms: [linux, darwin]
+
+  stop-phoenix:
+    desc: Para o Arize Phoenix
+    cmds:
+      - cmd: powershell -ExecutionPolicy Bypass -File {{.SCRIPTS_DIR}}/setup-phoenix.ps1 -Stop
+        platforms: [windows]
+      - cmd: '{{.SCRIPTS_DIR}}/setup-phoenix.sh --stop'
+        platforms: [linux, darwin]
+
+  status-phoenix:
+    desc: Verifica status do Arize Phoenix
+    cmds:
+      - cmd: powershell -ExecutionPolicy Bypass -File {{.SCRIPTS_DIR}}/setup-phoenix.ps1 -Status
+        platforms: [windows]
+      - cmd: '{{.SCRIPTS_DIR}}/setup-phoenix.sh --status'
+        platforms: [linux, darwin]
+
+  # ---------------------------------------------------------------------------
+  # Atualização
+  # ---------------------------------------------------------------------------
+  upgrade:
+    desc: Atualiza todos os componentes para última versão
+    cmds:
+      - task: upgrade-code-search
+      - task: upgrade-code-navigation
+      - task: upgrade-observability
+
+  upgrade-code-search:
+    desc: Atualiza codebase-memory-mcp
+    cmds:
+      - cmd: powershell -ExecutionPolicy Bypass -File {{.SCRIPTS_DIR}}/setup-codebase-memory.ps1 -Upgrade
+        platforms: [windows]
+      - cmd: '{{.SCRIPTS_DIR}}/setup-codebase-memory.sh --upgrade'
+        platforms: [linux, darwin]
+
+  upgrade-code-navigation:
+    desc: Atualiza Serena MCP
+    cmds:
+      - cmd: powershell -ExecutionPolicy Bypass -File {{.SCRIPTS_DIR}}/setup-serena.ps1 -Upgrade
+        platforms: [windows]
+      - cmd: '{{.SCRIPTS_DIR}}/setup-serena.sh --upgrade'
+        platforms: [linux, darwin]
+
+  upgrade-observability:
+    desc: Atualiza Arize Phoenix
+    cmds:
+      - cmd: powershell -ExecutionPolicy Bypass -File {{.SCRIPTS_DIR}}/setup-phoenix.ps1 -Upgrade
+        platforms: [windows]
+      - cmd: '{{.SCRIPTS_DIR}}/setup-phoenix.sh --force-reinstall'
+        platforms: [linux, darwin]
+
+  # ---------------------------------------------------------------------------
+  # Monitoramento
+  # ---------------------------------------------------------------------------
+  enable-monitoring:
+    desc: Habilita proxy logger com export OTEL para Phoenix
+    cmds:
+      - cmd: powershell -ExecutionPolicy Bypass -File {{.SCRIPTS_DIR}}/toggle-monitoring.ps1 -Enable -Phoenix
+        platforms: [windows]
+      - cmd: echo "Copie o conteúdo de .vscode/mcp-with-monitoring.json para o mcp.json do IntelliJ e reinicie."
+        platforms: [linux, darwin]
+
+  disable-monitoring:
+    desc: Desabilita proxy logger (volta ao mcp.json padrão)
+    cmds:
+      - cmd: powershell -ExecutionPolicy Bypass -File {{.SCRIPTS_DIR}}/toggle-monitoring.ps1 -Disable
+        platforms: [windows]
+      - cmd: echo "Copie o conteúdo de .vscode/mcp.json para o mcp.json do IntelliJ e reinicie."
+        platforms: [linux, darwin]
+
+  # ---------------------------------------------------------------------------
+  # Modo Online/Offline
+  # ---------------------------------------------------------------------------
+  mode-online:
+    desc: Exibe instruções para modo online (GitHub Copilot Cloud)
+    silent: true
+    cmds:
+      - |
+        echo ""
+        echo "╔══════════════════════════════════════════════════════════════╗"
+        echo "║  MODO ONLINE — GitHub Copilot Cloud                        ║"
+        echo "╠══════════════════════════════════════════════════════════════╣"
+        echo "║                                                            ║"
+        echo "║  1. Abrir IntelliJ → Copilot Chat                          ║"
+        echo "║  2. No dropdown do modelo, selecionar:                     ║"
+        echo "║     GPT-4o / Claude Sonnet / Gemini                        ║"
+        echo "║                                                            ║"
+        echo "║  Os servidores MCP continuam funcionando localmente.        ║"
+        echo "║  Nenhuma reconfiguração necessária.                        ║"
+        echo "║                                                            ║"
+        echo "╚══════════════════════════════════════════════════════════════╝"
+        echo ""
+
+  mode-offline:
+    desc: Exibe instruções para modo offline (Ollama local)
+    silent: true
+    cmds:
+      - |
+        echo ""
+        echo "╔══════════════════════════════════════════════════════════════╗"
+        echo "║  MODO OFFLINE — Ollama Local                               ║"
+        echo "╠══════════════════════════════════════════════════════════════╣"
+        echo "║                                                            ║"
+        echo "║  Pré-requisitos:                                           ║"
+        echo "║    ollama serve                                            ║"
+        echo "║    ollama pull qwen2.5-coder:32b                           ║"
+        echo "║                                                            ║"
+        echo "║  IntelliJ:                                                 ║"
+        echo "║    Settings → AI Assistant → Providers & API Keys          ║"
+        echo "║    → Ollama → http://localhost:11434                        ║"
+        echo "║    → Model Assignment → selecionar modelo Ollama           ║"
+        echo "║                                                            ║"
+        echo "║  CLI:                                                      ║"
+        echo "║    export COPILOT_PROVIDER_BASE_URL=http://localhost:11434  ║"
+        echo "║    export COPILOT_MODEL=qwen2.5-coder:32b                  ║"
+        echo "║    export COPILOT_OFFLINE=true                             ║"
+        echo "║                                                            ║"
+        echo "║  Os servidores MCP continuam funcionando localmente.        ║"
+        echo "║  Nenhuma reconfiguração necessária.                        ║"
+        echo "║                                                            ║"
+        echo "╚══════════════════════════════════════════════════════════════╝"
+        echo ""
+
+  # ---------------------------------------------------------------------------
+  # Utilitários
+  # ---------------------------------------------------------------------------
+  clean:
+    desc: Remove caches e índices locais (requer re-indexação)
+    cmds:
+      - cmd: powershell -ExecutionPolicy Bypass -Command "Remove-Item -Recurse -Force $env:USERPROFILE\.codebase-memory -ErrorAction SilentlyContinue; Write-Host 'Cache removido.'"
+        platforms: [windows]
+      - cmd: rm -rf ~/.codebase-memory && echo "Cache removido."
+        platforms: [linux, darwin]
+
+  proxy-workaround:
+    desc: Configura workaround para proxy corporativo com SSL inspection (Windows)
+    cmds:
+      - cmd: powershell -ExecutionPolicy Bypass -File {{.SCRIPTS_DIR}}/setup-proxy-workaround.ps1
+        platforms: [windows]
+      - cmd: echo "Workaround de proxy não necessário no Linux (certificados gerenciados pelo sistema)."
+        platforms: [linux, darwin]
+
+  install-task:
+    desc: Instruções para instalar o go-task nesta máquina
+    silent: true
+    cmds:
+      - |
+        echo ""
+        echo "Instalação do go-task (binário único, sem admin):"
+        echo ""
+        echo "  Windows (PowerShell):"
+        echo "    Invoke-WebRequest -Uri 'https://github.com/go-task/task/releases/latest/download/task_windows_amd64.zip' -OutFile \"\$env:TEMP\\task.zip\""
+        echo "    Expand-Archive \"\$env:TEMP\\task.zip\" -DestinationPath \"\$env:USERPROFILE\\.local\\bin\" -Force"
+        echo "    # Adicionar ao PATH: \$env:PATH += \";\$env:USERPROFILE\\.local\\bin\""
+        echo ""
+        echo "  Linux:"
+        echo "    sh -c \"\$(curl -fsSL https://taskfile.dev/install.sh)\" -- -d ~/.local/bin"
+        echo ""
+        echo "  macOS:"
+        echo "    brew install go-task"
+        echo ""
