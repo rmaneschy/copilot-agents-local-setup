@@ -1,0 +1,38 @@
+# =============================================================================
+# .gitattributes — Controle de Line Endings por Plataforma
+# =============================================================================
+# Garante que scripts Windows usem CRLF e scripts Linux usem LF,
+# independentemente do sistema operacional do desenvolvedor.
+# =============================================================================
+
+# Default: auto-detect (normaliza para LF no repositório)
+* text=auto
+
+# Taskfile e YAML: sempre LF (go-task é cross-platform e aceita LF)
+*.yml text eol=lf
+*.yaml text eol=lf
+
+# Scripts Linux: sempre LF
+*.sh text eol=lf
+
+# Scripts Windows: sempre CRLF
+*.ps1 text eol=crlf
+*.cmd text eol=crlf
+*.bat text eol=crlf
+
+# Markdown e documentação: LF (padrão GitHub)
+*.md text eol=lf
+
+# JSON: LF
+*.json text eol=lf
+
+# Python: LF
+*.py text eol=lf
+
+# Binários: não processar
+*.png binary
+*.jpg binary
+*.gif binary
+*.ico binary
+*.exe binary
+*.zip binary

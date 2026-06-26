@@ -86,7 +86,7 @@ tasks:
         platforms: [linux, darwin]
 
   index-repo:
-    desc: Indexa um repositório específico (uso: task index-repo -- nome-do-repo)
+    desc: "Indexa um repositório específico (uso: task index-repo -- nome-do-repo)"
     cmds:
       - cmd: powershell -ExecutionPolicy Bypass -File {{.SCRIPTS_DIR}}/index-workspace.ps1 -Include "{{.CLI_ARGS}}"
         platforms: [windows]
@@ -116,7 +116,7 @@ tasks:
   # Phoenix (Observabilidade)
   # ---------------------------------------------------------------------------
   start-phoenix:
-    desc: Inicia o Arize Phoenix (localhost:6006)
+    desc: "Inicia o Arize Phoenix (localhost:6006)"
     cmds:
       - cmd: powershell -ExecutionPolicy Bypass -File {{.SCRIPTS_DIR}}/setup-phoenix.ps1 -Start
         platforms: [windows]
