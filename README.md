@@ -78,7 +78,7 @@ scripts/                                 # Automação de Setup (PowerShell)
 ├── inspect-mcp.ps1                      # Verificação rápida de servidores MCP
 ├── setup-proxy-workaround.ps1           # Contorno para proxy corporativo com SSL
 ├── setup-alternative-node.ps1           # Setup alternativo via Node.js/Bun
-├── index-workspace.ps1                  # Indexação do workspace para RAG
+├── index-workspace.ps1                  # Indexação recursiva (descobre repos via .git)
 ├── health-check.ps1                     # Verificação de saúde dos componentes
 ├── optimize-environment.ps1             # Otimização de desempenho (keep-alive, índices)
 ├── toggle-monitoring.ps1                # Habilitar/desabilitar monitoramento MCP
@@ -140,27 +140,28 @@ Isso é tudo. O `setup-codebase-memory.ps1` realiza:
 
 ### Indexação do Workspace
 
-A indexação ocorre **automaticamente** na primeira busca semântica via Copilot. Para indexação manual ou antecipada:
+A indexação ocorre **automaticamente** na primeira busca semântica via Copilot. Para indexação manual ou antecipada, o script `index-workspace.ps1` percorre o workspace **recursivamente**, identifica cada repositório pela presença da pasta `.git` e indexa individualmente:
 
 ```powershell
-# Indexar workspace específico (modo project)
-.\scripts\setup-codebase-memory.ps1 -WorkspacePath "C:\Users\SEU_USUARIO\workspace\meu-projeto"
+# Indexar todos os repositórios em ~/workspace (recursivo, profundidade 3)
+.\scripts\index-workspace.ps1
 
-# Indexar todos os projetos (modo workspace — busca cross-repository)
-.\scripts\setup-codebase-memory.ps1 -Scope workspace
+# Listar repositórios que seriam indexados (sem executar)
+.\scripts\index-workspace.ps1 -DryRun
 
-# Habilitar auto-index (indexa automaticamente ao conectar a um novo projeto)
-.\scripts\setup-codebase-memory.ps1 -AutoIndex
+# Indexar apenas repos que começam com "ms-", excluindo legados
+.\scripts\index-workspace.ps1 -Include "ms-*" -Exclude "*-legacy"
+
+# Re-indexação completa forçada, 4 repos em paralelo
+.\scripts\index-workspace.ps1 -Force -Parallel 4
+
+# Workspace customizado com profundidade máxima de 2
+.\scripts\index-workspace.ps1 -Path "C:\projetos" -MaxDepth 2
 ```
 
-Ou diretamente via CLI:
+O script utiliza uma estratégia **greedy-stop**: ao encontrar um `.git`, indexa aquele diretório e não desce em subdiretórios (evitando submodules duplicados). Ao final, exibe um relatório com status de cada repositório.
 
-```powershell
-cd C:\seu-projeto
-codebase-memory-mcp index
-```
-
-O índice é mantido atualizado automaticamente via **git-based change detection** — não é necessário reindexar manualmente.
+O índice é mantido atualizado automaticamente via **git-based change detection** — o script só é necessário para a indexação inicial ou re-indexação forçada.
 
 ### Compartilhamento de Índice com o Time
 
