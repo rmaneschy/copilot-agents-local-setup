@@ -6,7 +6,293 @@ O projeto **Copilot Agents Local Setup** fornece os scripts, configurações e f
 
 A integração principal ocorre com o **IntelliJ IDEA** (e opcionalmente VS Code) através do plugin **GitHub Copilot Chat**, utilizando o padrão *Model Context Protocol* (MCP). A solução combina **duas abordagens complementares**: knowledge graph com busca semântica integrada (codebase-memory-mcp) e navegação estrutural determinística (Serena MCP via LSP).
 
-> **Nota:** Os documentos conceituais sobre agentes, orquestradores e melhores práticas estão no repositório irmão [copilot-agents-setup](https://github.com/rmaneschy/copilot-agents-setup). Este repositório foca na **infraestrutura local** (instalação, configuração e operação), com exceção do [Comparativo de Frameworks SDD](docs/concepts/spec-driven-development-frameworks.md) que orienta a escolha de metodologia para o time.
+> **Nota:** Os documentos conceituais sobre agentes, orquestradores e melhores práticas estão no repositório irmão [copilot-agents-setup](https://github.com/rmaneschy/copilot-agents-setup). Este repositório foca na **infraestrutura local** (instalação, configuração e operação).
+
+---
+
+## Fluxo de Execução — Cenário Principal (Máquina Limpa)
+
+Este é o passo a passo completo para configurar uma máquina nova do zero. Siga **na ordem indicada**.
+
+### Fase 1: Instalação dos Componentes (PowerShell)
+
+| Passo | Script | Tempo | Descrição |
+|:---:|:---|:---:|:---|
+| 1 | `.\scripts\setup-codebase-memory.ps1` | ~2 min | Baixa binário estático (~15MB), instala no PATH do usuário, configura `mcp.json` |
+| 2 | `.\scripts\setup-serena.ps1` | ~3 min | Instala `uv` + Serena MCP (LSP server) sem admin |
+| 3 | `.\scripts\setup-phoenix.ps1 -Start -AirGapped` | ~3 min | Instala Arize Phoenix (observabilidade) e inicia o servidor local |
+| 4 | `.\scripts\index-workspace.ps1` | ~5 min* | Descobre repos via `.git` e indexa o knowledge graph (*varia com tamanho do workspace) |
+
+**Total estimado:** ~13 minutos (primeira execução com internet).
+
+### Fase 2: Configuração do IntelliJ IDEA
+
+Após a Fase 1, configure o IntelliJ para reconhecer os servidores MCP:
+
+| Passo | Ação | Caminho no IntelliJ |
+|:---:|:---|:---|
+| 5 | Abrir Settings | `File → Settings` (ou `Ctrl+Alt+S`) |
+| 6 | Navegar até MCP | `Tools → GitHub Copilot → Model Context Protocol (MCP)` |
+| 7 | Clicar em "Configure" | Abre o arquivo `mcp.json` para edição |
+| 8 | Colar configuração | Copiar o conteúdo de `.vscode/mcp.json` deste repositório |
+| 9 | Salvar e fechar | O IntelliJ detecta automaticamente os novos servers |
+| 10 | Reiniciar o IntelliJ | Necessário para carregar os MCP servers |
+
+**Conteúdo do `mcp.json` (padrão sem monitoramento):**
+
+```json
+{
+  "servers": {
+    "code-navigation": {
+      "type": "stdio",
+      "command": "serena",
+      "args": ["--context=jb-copilot-plugin"]
+    },
+    "code-search": {
+      "type": "stdio",
+      "command": "codebase-memory-mcp",
+      "args": []
+    }
+  }
+}
+```
+
+**Conteúdo do `mcp.json` (com monitoramento Phoenix):**
+
+```json
+{
+  "servers": {
+    "code-navigation": {
+      "type": "stdio",
+      "command": "python",
+      "args": [
+        "${userHome}/.copilot-metrics/mcp-proxy-logger.py",
+        "--server", "code-navigation",
+        "--command", "serena",
+        "--args", "--context=jb-copilot-plugin",
+        "--phoenix"
+      ]
+    },
+    "code-search": {
+      "type": "stdio",
+      "command": "python",
+      "args": [
+        "${userHome}/.copilot-metrics/mcp-proxy-logger.py",
+        "--server", "code-search",
+        "--command", "codebase-memory-mcp",
+        "--phoenix"
+      ]
+    }
+  }
+}
+```
+
+### Fase 3: Validação no IntelliJ
+
+Após reiniciar o IntelliJ, valide que tudo está funcionando:
+
+| Passo | Ação | Resultado Esperado |
+|:---:|:---|:---|
+| 11 | Abrir Copilot Chat | Painel lateral com ícone do Copilot |
+| 12 | Verificar tools disponíveis | Clicar no ícone de ferramentas (🔧) no chat — deve listar `code-navigation` e `code-search` |
+| 13 | Testar `code-search` | Digitar: *"Busque funções relacionadas a autenticação neste projeto"* |
+| 14 | Testar `code-navigation` | Digitar: *"Encontre todas as referências ao símbolo PaymentService"* |
+| 15 | Verificar Agent Mode | Digitar `/agent` ou selecionar modo "Agent" no dropdown — deve mostrar tools MCP disponíveis |
+
+**Sinais de que está funcionando:**
+- O Copilot menciona "Using tool: code-search" ou "Using tool: code-navigation" nas respostas
+- Os resultados contêm referências a arquivos reais do seu projeto
+- Não há mensagens de erro "MCP server not found" ou "Connection refused"
+
+**Troubleshooting rápido:**
+
+| Sintoma | Solução |
+|:---|:---|
+| Tools não aparecem no chat | Reiniciar IntelliJ; verificar se `mcp.json` está em `Tools > GitHub Copilot > MCP` |
+| "Server not found" | Executar `.\scripts\inspect-mcp.ps1` para verificar binários no PATH |
+| "Connection refused" | Verificar se o binário está acessível: `where.exe codebase-memory-mcp` no PowerShell |
+| Tools aparecem mas não retornam resultados | Executar `.\scripts\index-workspace.ps1` para indexar o workspace |
+| Phoenix não recebe traces | Verificar se o `mcp.json` usa a versão com `--phoenix` e se Phoenix está rodando (`.\scripts\setup-phoenix.ps1 -Status`) |
+
+---
+
+## Fluxos Alternativos
+
+### Cenário A: Máquina já configurada (uso diário)
+
+Nenhum script é necessário no dia a dia. Os servidores MCP são invocados automaticamente pelo IntelliJ quando o Copilot precisa de uma tool. O knowledge graph é atualizado automaticamente via git-based change detection.
+
+Se desejar iniciar o Phoenix para monitoramento:
+
+```powershell
+.\scripts\setup-phoenix.ps1 -Start
+```
+
+### Cenário B: Novo repositório adicionado ao workspace
+
+```powershell
+# Indexar apenas o novo repositório
+.\scripts\index-workspace.ps1 -Include "nome-do-novo-repo"
+```
+
+### Cenário C: Atualização dos componentes
+
+```powershell
+# Atualizar codebase-memory-mcp para última versão
+.\scripts\setup-codebase-memory.ps1 -Upgrade
+
+# Atualizar Serena MCP
+.\scripts\setup-serena.ps1 -Upgrade
+
+# Atualizar Phoenix
+.\scripts\setup-phoenix.ps1 -Upgrade
+```
+
+### Cenário D: Habilitar monitoramento após instalação inicial
+
+```powershell
+# Instalar Phoenix (se não fez na Fase 1)
+.\scripts\setup-phoenix.ps1 -Start -AirGapped
+
+# Habilitar proxy logger com export OTEL
+.\scripts\toggle-monitoring.ps1 -Enable -Phoenix
+
+# Reiniciar IntelliJ para aplicar novo mcp.json
+```
+
+### Cenário E: Ambiente com proxy corporativo (SSL inspection)
+
+```powershell
+# Executar antes dos demais scripts
+.\scripts\setup-proxy-workaround.ps1
+
+# Depois seguir o fluxo principal normalmente
+.\scripts\setup-codebase-memory.ps1
+.\scripts\setup-serena.ps1
+```
+
+### Cenário F: Compartilhar índice com o time (evitar re-indexação)
+
+```powershell
+# Desenvolvedor que indexou primeiro:
+git add .codebase-memory/graph.db.zst
+git commit -m "chore: atualiza índice do knowledge graph"
+git push
+
+# Colegas do time:
+git pull  # índice atualizado automaticamente (incremental)
+```
+
+---
+
+## Slider Online/Offline: GitHub Copilot ↔ Ollama
+
+A solução suporta dois modos de operação do LLM (modelo de linguagem que gera as respostas). Os **servidores MCP** (code-search, code-navigation) funcionam **independentemente** do modo escolhido — eles apenas fornecem contexto; quem "pensa" é o LLM.
+
+### Modo Online (Padrão): GitHub Copilot Cloud
+
+```
+┌─────────────────┐     ┌──────────────────┐     ┌─────────────────────┐
+│  Desenvolvedor  │────▶│  GitHub Copilot   │────▶│  GPT-4o / Claude /  │
+│  (IntelliJ)     │     │  Plugin           │     │  Gemini (Cloud)     │
+└─────────────────┘     └────────┬─────────┘     └─────────────────────┘
+                                 │
+                    ┌────────────┼────────────┐
+                    ▼            ▼            ▼
+              code-search  code-navigation  issue-tracker
+              (local MCP)   (local MCP)     (local MCP)
+```
+
+**Configuração:** Nenhuma alteração necessária. O plugin do GitHub Copilot usa os modelos cloud por padrão.
+
+**Seleção de modelo no IntelliJ:**
+1. Abrir Copilot Chat
+2. No rodapé do chat, clicar no dropdown do modelo atual (ex: "GPT-4o")
+3. Selecionar o modelo desejado (GPT-4o, Claude Sonnet, Gemini, etc.)
+
+**Vantagens:** Modelos maiores e mais capazes, zero consumo de GPU local, sempre atualizado.
+
+**Quando usar:** Tarefas complexas (arquitetura, refatoração grande, análise cross-service), quando há internet disponível.
+
+---
+
+### Modo Offline: Ollama Local
+
+```
+┌─────────────────┐     ┌──────────────────┐     ┌─────────────────────┐
+│  Desenvolvedor  │────▶│  GitHub Copilot   │────▶│  Ollama             │
+│  (IntelliJ)     │     │  Plugin (BYOK)    │     │  (localhost:11434)  │
+└─────────────────┘     └────────┬─────────┘     └─────────────────────┘
+                                 │
+                    ┌────────────┼────────────┐
+                    ▼            ▼            ▼
+              code-search  code-navigation  issue-tracker
+              (local MCP)   (local MCP)     (local MCP)
+```
+
+**Pré-requisitos:**
+1. Ollama instalado e rodando (`ollama serve`)
+2. Modelo com suporte a **tool calling** baixado (ex: `qwen2.5-coder:32b`, `llama3.1:70b`)
+
+**Configuração no IntelliJ (JetBrains AI Assistant):**
+
+| Passo | Ação | Caminho |
+|:---:|:---|:---|
+| 1 | Abrir Settings | `File → Settings → Tools → AI Assistant → Providers & API Keys` |
+| 2 | Adicionar provider | Selecionar "Ollama" na lista de providers |
+| 3 | Configurar URL | `http://localhost:11434` |
+| 4 | Testar conexão | Clicar "Test Connection" — deve retornar sucesso |
+| 5 | Atribuir modelo | Em "Model Assignment" → "Core features" → selecionar o modelo Ollama |
+| 6 | Aplicar | Clicar OK e reiniciar o chat |
+
+**Configuração via Copilot CLI (Terminal):**
+
+```powershell
+# Variáveis de ambiente para modo offline completo
+$env:COPILOT_PROVIDER_BASE_URL = "http://localhost:11434"
+$env:COPILOT_MODEL = "qwen2.5-coder:32b"
+$env:COPILOT_OFFLINE = "true"
+
+# Iniciar Copilot CLI em modo offline
+copilot
+```
+
+**Vantagens:** 100% offline, privacidade total, sem custo por token, sem dependência de internet.
+
+**Quando usar:** Ambientes air-gapped, código sensível/NDA, quando internet está indisponível, experimentação sem consumir créditos.
+
+---
+
+### Como Alternar entre Online e Offline
+
+A alternância é feita **no nível do modelo selecionado**, não nos servidores MCP:
+
+| Ação | Online → Offline | Offline → Online |
+|:---|:---|:---|
+| **IntelliJ (AI Assistant)** | Settings → AI Assistant → Model Assignment → selecionar modelo Ollama | Settings → AI Assistant → Model Assignment → selecionar modelo cloud |
+| **IntelliJ (Copilot Chat)** | Dropdown do modelo no chat → selecionar modelo local (se configurado via BYOK) | Dropdown do modelo no chat → selecionar GPT-4o/Claude/Gemini |
+| **Copilot CLI** | Definir `COPILOT_PROVIDER_BASE_URL` + `COPILOT_OFFLINE=true` | Remover variáveis de ambiente (usa cloud por padrão) |
+
+> **Importante:** Os servidores MCP (code-search, code-navigation) **não precisam ser reconfigurados** ao alternar. Eles são agnósticos ao LLM — funcionam igualmente em ambos os modos.
+
+### Modelos Recomendados para Modo Offline
+
+| Modelo | RAM Mínima | Tool Calling | Contexto | Recomendação |
+|:---|:---:|:---:|:---:|:---|
+| `qwen2.5-coder:7b` | 8 GB | ✓ | 128k | Mínimo viável para Agent Mode |
+| `qwen2.5-coder:32b` | 24 GB | ✓ | 128k | Melhor custo-benefício para desenvolvimento |
+| `llama3.1:70b` | 48 GB | ✓ | 128k | Mais capaz, requer GPU dedicada |
+| `deepseek-coder-v2:16b` | 12 GB | ✓ | 128k | Boa alternativa para hardware limitado |
+
+Para configurar o Ollama com tweaks de performance:
+
+```powershell
+# Baixar modelo recomendado
+ollama pull qwen2.5-coder:32b
+
+# Aplicar tweaks de performance (keep-alive, GPU layers)
+.\scripts\apply-ollama-tweaks.ps1
+```
 
 ---
 
@@ -15,33 +301,13 @@ A integração principal ocorre com o **IntelliJ IDEA** (e opcionalmente VS Code
 A arquitetura baseia-se na composição de ferramentas de código aberto e leves, garantindo privacidade absoluta (o código nunca sai da máquina para ser indexado) e baixo consumo de recursos do desenvolvedor.
 
 | Componente | Função | Justificativa |
-| :--- | :--- | :--- |
-| **codebase-memory-mcp** | Motor de code intelligence que indexa o código em um knowledge graph persistente, expondo 14 ferramentas MCP (busca semântica, call graph, análise de impacto, arquitetura). | Binário estático único (C puro), zero dependências. Modelo de embedding (`nomic-embed-code`, 768d) compilado no binário. 158 linguagens via tree-sitter. 100% offline desde o primeiro uso. Substitui o mcp-vector-search v4 com abordagem plug-and-play. |
+|:---|:---|:---|
+| **codebase-memory-mcp** | Motor de code intelligence que indexa o código em um knowledge graph persistente, expondo 14 ferramentas MCP (busca semântica, call graph, análise de impacto, arquitetura). | Binário estático único (C puro), zero dependências. Modelo de embedding (`nomic-embed-code`, 768d) compilado no binário. 158 linguagens via tree-sitter. 100% offline desde o primeiro uso. |
 | **Serena MCP** | Servidor MCP patrocinado pela Microsoft que utiliza o *Language Server Protocol* (LSP). | Fornece navegação determinística no código (find_symbol, find_references), complementando o knowledge graph. Instala-se via `uv` sem privilégios de administrador. |
-| **Ollama** (opcional) | Motor local para modelos de linguagem (chat/completion). | Permite instalação em nível de usuário no Windows (sem admin). Utilizado apenas para LLM local (chat), **não é necessário para code intelligence**. |
+| **Arize Phoenix** | Plataforma open-source de observabilidade para agentes de IA. | Visualiza traces de decisões dos agentes (tool calls, latência, erros). Instalação via pip, sem Docker. UI em `localhost:6006`. |
+| **Ollama** (opcional) | Motor local para modelos de linguagem (chat/completion). | Permite instalação em nível de usuário no Windows (sem admin). Utilizado para LLM local no modo offline. |
 
-Para um aprofundamento técnico, consulte o documento de [Arquitetura da Solução](docs/architecture.md) e a [Análise Comparativa com Alternativas de Mercado](docs/comparativo-alternativas.md) (como Sourcebot, Continue.dev e Greptile).
-
----
-
-## Evolução da Solução: de RAG Vetorial para Knowledge Graph
-
-A solução evoluiu significativamente ao adotar o **codebase-memory-mcp** como motor principal de code intelligence, substituindo a abordagem anterior baseada em RAG vetorial (mcp-vector-search v4 + sentence-transformers + LanceDB).
-
-| Aspecto | Antes (mcp-vector-search v4) | Agora (codebase-memory-mcp) |
-| :--- | :--- | :--- |
-| **Instalação** | Python venv + pip + download de modelo (~90MB) | 1 comando (`install.ps1`), binário estático (~15MB) |
-| **Dependências** | Python 3.11+, sentence-transformers, LanceDB | Zero (binário auto-contido, C puro) |
-| **Embedding** | Download separado do HuggingFace | Compilado no binário (`nomic-embed-code`, 768d) |
-| **Linguagens** | Limitado (parsers Python) | 158 linguagens (tree-sitter vendored) |
-| **Abordagem** | Busca vetorial semântica apenas | Knowledge graph + busca semântica + call graph + cross-service |
-| **MCP Tools** | 3-5 tools | 14 tools (search, trace, architecture, impact, Cypher) |
-| **Offline** | Após download inicial do modelo | 100% offline desde o primeiro uso |
-| **Cross-service** | Não suportado | HTTP, gRPC, GraphQL, pub-sub |
-| **Team sharing** | Não suportado | `.codebase-memory/graph.db.zst` commitável via git |
-| **Benchmark** | — | 99% token reduction, queries <1ms, Linux kernel (28M LOC) em 3 min |
-
-O script legado `setup-vector-search.ps1` permanece disponível para cenários de migração, mas o **setup recomendado** agora utiliza `setup-codebase-memory.ps1`.
+Para um aprofundamento técnico, consulte o documento de [Arquitetura da Solução](docs/architecture.md) e a [Análise Comparativa com Alternativas de Mercado](docs/comparativo-alternativas.md).
 
 ---
 
@@ -49,7 +315,7 @@ O script legado `setup-vector-search.ps1` permanece disponível para cenários d
 
 ```text
 .github/
-├── agents/                              # Agentes especializados para uso com RAG + Serena
+├── agents/                              # Agentes especializados para uso com MCP
 │   ├── techlead-architecture.md         #   Análise arquitetural de microserviços
 │   ├── techlead-c4-diagram.md           #   Geração de diagramas C4 Container
 │   ├── techlead-communication.md        #   Mapeamento de comunicação entre serviços
@@ -64,26 +330,26 @@ O script legado `setup-vector-search.ps1` permanece disponível para cenários d
 └── copilot-instructions.md              # Instruções de contexto global
 
 .vscode/
-├── mcp.json                             # Configuração MCP padrão (RAG + Serena)
+├── mcp.json                             # Configuração MCP padrão
 └── mcp-with-monitoring.json             # Configuração MCP com proxy de monitoramento
 
 scripts/                                 # Automação de Setup (PowerShell)
-├── setup.ps1                            # Setup completo (detecção de hardware + componentes)
 ├── setup-codebase-memory.ps1            # [RECOMENDADO] Setup plug-and-play do codebase-memory-mcp
-├── setup-phoenix.ps1                    # [NOVO] Setup Arize Phoenix (observabilidade de agentes)
-├── setup-vector-search.ps1              # [LEGADO] Setup do mcp-vector-search v4 (RAG vetorial)
-├── apply-ollama-tweaks.ps1              # Aplica/troca tweaks do Ollama por perfil de hardware
 ├── setup-serena.ps1                     # Setup Serena MCP (uv + LSP)
-├── setup-n8n.ps1                        # Setup n8n (orquestrador visual de agentes)
-├── setup-mcp-inspector.ps1              # Executa MCP Inspector (debug visual de tools)
-├── inspect-mcp.ps1                      # Verificação rápida de servidores MCP
-├── setup-proxy-workaround.ps1           # Contorno para proxy corporativo com SSL
-├── setup-alternative-node.ps1           # Setup alternativo via Node.js/Bun
+├── setup-phoenix.ps1                    # Setup Arize Phoenix (observabilidade de agentes)
 ├── index-workspace.ps1                  # Indexação recursiva (descobre repos via .git)
 ├── health-check.ps1                     # Verificação de saúde dos componentes
-├── optimize-environment.ps1             # Otimização de desempenho (keep-alive, índices)
+├── inspect-mcp.ps1                      # Verificação rápida de servidores MCP
 ├── toggle-monitoring.ps1                # Habilitar/desabilitar monitoramento MCP
-└── generate-dashboard.ps1               # Gerar dashboard HTML de desempenho
+├── generate-dashboard.ps1               # Gerar dashboard HTML de desempenho
+├── optimize-environment.ps1             # Otimização de desempenho (keep-alive, índices)
+├── apply-ollama-tweaks.ps1              # Aplica/troca tweaks do Ollama por perfil de hardware
+├── setup-mcp-inspector.ps1              # Executa MCP Inspector (debug visual de tools)
+├── setup-n8n.ps1                        # Setup n8n (orquestrador visual de agentes)
+├── setup-proxy-workaround.ps1           # Contorno para proxy corporativo com SSL
+├── setup.ps1                            # [LEGADO] Setup completo v1 (Ollama + mcp-vector-search)
+├── setup-vector-search.ps1              # [LEGADO] Setup do mcp-vector-search v4
+└── setup-alternative-node.ps1           # [LEGADO] Setup alternativo via Node.js/Bun
 
 monitoring/
 └── mcp-proxy-logger.py                  # Proxy transparente para logging JSON-RPC + export OTEL
@@ -93,89 +359,9 @@ docs/                                    # Documentação técnica da infraestru
 ├── comparativo-alternativas.md          # Comparação com Sourcebot, Continue.dev, Greptile
 ├── guia-observabilidade-phoenix.md      # Guia completo do Arize Phoenix (traces, logs, recursos)
 ├── ollama-tweaks-e-perfis-hardware.md   # Tweaks do Ollama, KV Cache e perfis de hardware
+├── diagrams/                            # Diagramas de arquitetura (D2 + PNG)
 └── concepts/
     └── spec-driven-development-frameworks.md  # Comparativo SDD (SpecKit, Superpowers, OpenSpec)
-```
-
----
-
-## Instalação e Configuração
-
-O processo de instalação foi automatizado por meio de scripts PowerShell, projetados para rodar sem elevação de privilégios.
-
-### Pré-requisitos
-
-1. **Windows 11** (sem necessidade de privilégios administrativos).
-2. **IntelliJ IDEA** com o plugin **GitHub Copilot** (versão 1.5.57 ou superior, com Agent Mode e MCP habilitados).
-3. **Conexão com internet** (apenas para o download inicial do binário, ~15MB; após isso, 100% offline).
-4. **Ollama** (opcional, apenas se desejar LLM local para chat; baixe em [ollama.com/download](https://ollama.com/download)).
-
-> **Nota:** Python, Node.js, Docker e API keys **não são mais necessários** para a solução principal de code intelligence.
-
-### Passos para Instalação (Recomendado)
-
-1. Clone este repositório em sua máquina local.
-2. Abra o PowerShell e navegue até a pasta do projeto.
-3. Execute o script de configuração principal:
-
-```powershell
-# Instalar codebase-memory-mcp (code intelligence via knowledge graph)
-.\scripts\setup-codebase-memory.ps1
-
-# Instalar Serena MCP (navegação LSP determinística)
-.\scripts\setup-serena.ps1
-```
-
-Isso é tudo. O `setup-codebase-memory.ps1` realiza:
-
-1. Download do binário estático (~15MB) com verificação SHA-256
-2. Instalação em `%LOCALAPPDATA%\Programs\codebase-memory-mcp`
-3. Adição ao PATH do usuário (sem admin)
-4. Configuração automática do `mcp.json` para GitHub Copilot no IntelliJ
-5. Opcionalmente, indexação inicial do workspace
-
-> **Variante com visualização 3D do knowledge graph:**
-> ```powershell
-> .\scripts\setup-codebase-memory.ps1 -Variant ui
-> # Abre http://localhost:9749 para explorar o grafo interativamente
-> ```
-
-### Indexação do Workspace
-
-A indexação ocorre **automaticamente** na primeira busca semântica via Copilot. Para indexação manual ou antecipada, o script `index-workspace.ps1` percorre o workspace **recursivamente**, identifica cada repositório pela presença da pasta `.git` e indexa individualmente:
-
-```powershell
-# Indexar todos os repositórios em ~/workspace (recursivo, profundidade 3)
-.\scripts\index-workspace.ps1
-
-# Listar repositórios que seriam indexados (sem executar)
-.\scripts\index-workspace.ps1 -DryRun
-
-# Indexar apenas repos que começam com "ms-", excluindo legados
-.\scripts\index-workspace.ps1 -Include "ms-*" -Exclude "*-legacy"
-
-# Re-indexação completa forçada, 4 repos em paralelo
-.\scripts\index-workspace.ps1 -Force -Parallel 4
-
-# Workspace customizado com profundidade máxima de 2
-.\scripts\index-workspace.ps1 -Path "C:\projetos" -MaxDepth 2
-```
-
-O script utiliza uma estratégia **greedy-stop**: ao encontrar um `.git`, indexa aquele diretório e não desce em subdiretórios (evitando submodules duplicados). Ao final, exibe um relatório com status de cada repositório.
-
-O índice é mantido atualizado automaticamente via **git-based change detection** — o script só é necessário para a indexação inicial ou re-indexação forçada.
-
-### Compartilhamento de Índice com o Time
-
-O knowledge graph pode ser compartilhado via git, evitando que cada desenvolvedor precise reindexar do zero:
-
-```powershell
-# Commitar o índice comprimido
-git add .codebase-memory/graph.db.zst
-git commit -m "chore: atualiza índice do knowledge graph"
-
-# Colegas fazem incremental diff (não full reindex)
-git pull  # índice atualizado automaticamente
 ```
 
 ---
@@ -185,7 +371,7 @@ git pull  # índice atualizado automaticamente
 O codebase-memory-mcp expõe 14 ferramentas via MCP que o GitHub Copilot pode invocar automaticamente no Agent Mode:
 
 | Ferramenta | Função |
-| :--- | :--- |
+|:---|:---|
 | `search_graph` | Busca estrutural (regex, label, degree, file scoping) |
 | `semantic_query` | Busca semântica vetorial em linguagem natural |
 | `trace_call_path` | Call graph (quem chama / é chamado por) |
@@ -203,100 +389,6 @@ O codebase-memory-mcp expõe 14 ferramentas via MCP que o GitHub Copilot pode in
 
 ---
 
-## Utilização e Prompts Especializados
-
-Uma vez configurado, o servidor MCP local expõe as ferramentas de code intelligence para o GitHub Copilot. Você pode invocar os agentes e *prompts* diretamente no chat do IntelliJ para realizar tarefas complexas.
-
-### 1. Análise Arquitetural de Serviço
-
-Para analisar o fluxo de ponta a ponta de um microserviço, utilize o agente de arquitetura:
-
-> "Ative o projeto do serviço <NOME_DO_SERVICO> com Serena.
-> Analise o fluxo arquitetural de ponta a ponta: endpoints de entrada, controllers/handlers, services/use cases, repositories/DAOs, chamadas HTTP/gRPC externas, publicação ou consumo de mensagens, acesso a banco, tratamento de erro, autenticação/autorização e observabilidade.
-> Use ferramentas semânticas como visão geral de símbolos, busca por símbolo e referências. Retorne uma explicação com evidências por arquivo e símbolo. Não faça alterações."
-
-### 2. Mapeamento de Comunicação entre Microserviços
-
-Para descobrir relações de dependência no seu *workspace*:
-
-> "Na raiz C:\Users\SEU_USUARIO\workspace, descubra relações entre microserviços. Procure: URLs internas, nomes de serviços em variáveis de ambiente, clients Feign, WebClient, RestTemplate, Axios, fetch, gRPC, protobuf, tópicos Kafka/RabbitMQ/SQS/PubSub, consumers/producers, OpenAPI clients, Helm values, Kubernetes Service/Ingress, docker-compose service names.
-> Gere uma matriz: origem | destino | protocolo | evidência | criticidade | observações."
-
-### 3. Geração de Diagramas C4
-
-Para obter uma visão visual da arquitetura baseada em código real:
-
-> "Gere um diagrama C4 Container da plataforma com evidências de código."
-
-### 4. Consultas sobre Contratos e Segurança
-
-Você pode fazer perguntas direcionadas, como:
-- "Quais microserviços gravam na base de pedidos?"
-- "Quais serviços dependem deste contrato OpenAPI?"
-- "Onde a autenticação é validada e quais serviços ignoram autorização?"
-
-### 5. Análise de Impacto (Novo)
-
-Com o codebase-memory-mcp, é possível analisar o impacto de mudanças antes de fazer commit:
-
-> "Analise o impacto das minhas mudanças atuais (git diff). Quais funções são afetadas? Qual o risco de regressão?"
-
-### 6. Dead Code Detection (Novo)
-
-Para identificar código morto no projeto:
-
-> "Encontre funções que nunca são chamadas neste projeto. Exclua entry points e handlers de framework."
-
----
-
-## Ferramentas Visuais (MCP Inspector e n8n)
-
-Além do monitoramento via proxy, o projeto oferece duas ferramentas visuais complementares para teste, debug e orquestração de agentes.
-
-### MCP Inspector (Debug Visual de Servidores)
-
-O [MCP Inspector](https://github.com/modelcontextprotocol/inspector) é a ferramenta oficial do Model Context Protocol para testar e depurar servidores MCP. Ele fornece uma interface web interativa onde é possível invocar *tools*, consultar *resources* e testar *prompts* expostos pelos servidores locais.
-
-```powershell
-# Inspecionar o codebase-memory-mcp (padrão)
-.\scripts\setup-mcp-inspector.ps1
-
-# Inspecionar o Serena MCP
-.\scripts\setup-mcp-inspector.ps1 -Server serena
-
-# Inspecionar um servidor customizado
-.\scripts\setup-mcp-inspector.ps1 -Server custom -CustomCommand "node C:\meu-server\index.js"
-```
-
-A interface estará disponível em `http://localhost:6274`. Não requer instalação global; utiliza `npx` diretamente.
-
-### n8n (Orquestrador Visual de Agentes)
-
-O [n8n](https://n8n.io/) é uma plataforma *fair-code* de automação de workflows com suporte nativo ao MCP. Ele permite desenhar fluxos multi-agentes em um canvas visual, conectando LLMs locais (Ollama), servidores MCP e integrações externas (Jira, GitHub, Slack).
-
-```powershell
-# Instalar o n8n localmente (primeira vez)
-.\scripts\setup-n8n.ps1
-
-# Iniciar o n8n (uso diário)
-.\scripts\setup-n8n.ps1 -Start
-
-# Remover o n8n
-.\scripts\setup-n8n.ps1 -Uninstall
-```
-
-A interface estará disponível em `http://localhost:5678`. Para conectar os servidores MCP locais, utilize o nó **MCP Client Tool** no canvas do n8n.
-
-### Verificação Rápida de Servidores MCP
-
-Para verificar rapidamente quais servidores MCP estão disponíveis e seus binários:
-
-```powershell
-.\scripts\inspect-mcp.ps1
-```
-
----
-
 ## Monitoramento e Observabilidade
 
 O projeto inclui ferramentas completas para monitorar a saúde do sistema, o desempenho dos agentes e o fluxo de decisões via traces.
@@ -306,9 +398,6 @@ O projeto inclui ferramentas completas para monitorar a saúde do sistema, o des
 O **Arize Phoenix** é a plataforma open-source de observabilidade que permite visualizar o fluxo completo de decisões dos agentes — quais tools foram chamadas, em que ordem, quanto tempo levaram e se houve erros. Funciona 100% local via `pip install`, sem Docker ou admin.
 
 ```powershell
-# Instalar Phoenix
-.\scripts\setup-phoenix.ps1
-
 # Instalar e iniciar (modo air-gapped para corporativo)
 .\scripts\setup-phoenix.ps1 -Start -AirGapped
 
@@ -323,76 +412,53 @@ Acesse a UI em `http://localhost:6006` para visualizar traces em árvore, filtra
 
 ### Verificação de Saúde (Health Check)
 
-Para verificar se todos os componentes (codebase-memory-mcp, Serena, Phoenix, Ollama) estão rodando corretamente:
-
 ```powershell
 .\scripts\health-check.ps1
 ```
 
-### Dashboard de Desempenho (MCP Proxy Logger)
+### Dashboard de Desempenho
 
-O monitoramento avançado intercepta chamadas JSON-RPC de forma transparente e pode operar em dois modos:
-
-- **Modo JSONL** (padrão): Registra em `~/.copilot-metrics/calls.jsonl` para análise offline
-- **Modo JSONL + Phoenix**: Exporta traces OTEL para o Phoenix (requer flag `--phoenix`)
-
-**1. Habilitar o monitoramento (com Phoenix):**
 ```powershell
+# Habilitar monitoramento com Phoenix
 .\scripts\toggle-monitoring.ps1 -Enable -Phoenix
-```
-*(Reinicie o IntelliJ após habilitar)*
 
-**2. Gerar e visualizar o dashboard HTML:**
-```powershell
+# Gerar dashboard HTML
 .\scripts\generate-dashboard.ps1
 ```
 
-**3. Desabilitar o monitoramento:**
-```powershell
-.\scripts\toggle-monitoring.ps1 -Disable
-```
+---
 
-### Otimização de Desempenho
+## Ferramentas Visuais (MCP Inspector e n8n)
 
-Para entender em profundidade como cada configuração do Ollama afeta o desempenho dos agentes autônomos (incluindo KV Cache, Flash Attention e perfis por hardware), consulte o documento **[Ollama: Tweaks, KV Cache e Perfis de Hardware](docs/ollama-tweaks-e-perfis-hardware.md)**.
-
-### Aplicação de Tweaks do Ollama
-
-Para aplicar ou trocar as configurações de performance do Ollama sem executar o setup completo:
+### MCP Inspector (Debug Visual de Servidores)
 
 ```powershell
-# Detectar hardware e aplicar perfil automaticamente
-.\scripts\apply-ollama-tweaks.ps1
+# Inspecionar o codebase-memory-mcp (padrão)
+.\scripts\setup-mcp-inspector.ps1
 
-# Forçar perfil específico
-.\scripts\apply-ollama-tweaks.ps1 -Profile power
-
-# Simular sem aplicar (dry-run)
-.\scripts\apply-ollama-tweaks.ps1 -DryRun
-
-# Verificar configurações ativas
-.\scripts\apply-ollama-tweaks.ps1 -Verify
-
-# Restaurar padrões de fábrica
-.\scripts\apply-ollama-tweaks.ps1 -Reset
+# Inspecionar o Serena MCP
+.\scripts\setup-mcp-inspector.ps1 -Server serena
 ```
 
-Para maximizar a velocidade de resposta dos agentes e reduzir consumo de recursos, execute o script de otimização:
+A interface estará disponível em `http://localhost:6274`.
+
+### n8n (Orquestrador Visual de Agentes)
 
 ```powershell
-.\scripts\optimize-environment.ps1 -All
+# Instalar e iniciar o n8n
+.\scripts\setup-n8n.ps1 -Start
 ```
 
-Este script configura o Ollama keep-alive (modelo permanente em memória), cria índices vetoriais e escalares no LanceDB (até 46x menos comparações) e executa compactação de fragmentos.
+A interface estará disponível em `http://localhost:5678`.
 
 ---
 
 ## Repositório Irmão
 
 | Repositório | Propósito |
-| :--- | :--- |
+|:---|:---|
 | [copilot-agents-setup](https://github.com/rmaneschy/copilot-agents-setup) | Estrutura de agentes, skills, instruções, prompts e diretrizes para o agente autônomo de desenvolvimento. |
-| **Este repositório** | Scripts, configs e ferramentas para instalar e operar a infraestrutura local (codebase-memory-mcp, Serena, Ollama). |
+| **Este repositório** | Scripts, configs e ferramentas para instalar e operar a infraestrutura local (codebase-memory-mcp, Serena, Phoenix, Ollama). |
 
 ---
 
