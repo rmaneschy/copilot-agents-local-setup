@@ -145,21 +145,44 @@ if [ "$UNINSTALL" = true ]; then
 fi
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Etapa 1: Verificar instalação existente
+# Etapa 1: Verificar instalação existente e comparar versão
 # ─────────────────────────────────────────────────────────────────────────────
 echo -e "  ${NC}[1/4] Verificando instalação existente...${NC}"
 
+SKIP_DOWNLOAD=false
 if command -v "$BIN_NAME" &>/dev/null; then
-    CURRENT_VERSION=$("$BIN_NAME" --version 2>&1 || echo "desconhecida")
-    echo -e "${CYAN}    Versão atual: ${CURRENT_VERSION}${NC}"
-    echo -e "${CYAN}    Atualizando para a versão mais recente...${NC}"
+    CURRENT_VERSION=$("$BIN_NAME" --version 2>&1 | grep -oP '[0-9]+\.[0-9]+\.[0-9]+' | head -1 || echo "")
+    echo -e "${CYAN}    Versao local: ${CURRENT_VERSION}${NC}"
+
+    # Consultar versao mais recente via GitHub API
+    LATEST_VERSION=""
+    if command -v curl &>/dev/null; then
+        LATEST_VERSION=$(curl -fsSL --connect-timeout 10 \
+            "https://api.github.com/repos/${REPO}/releases/latest" 2>/dev/null | \
+            grep -oP '"tag_name":\s*"v?\K[0-9]+\.[0-9]+\.[0-9]+' || echo "")
+    fi
+
+    if [ -n "$LATEST_VERSION" ]; then
+        echo -e "${CYAN}    Versao remota: ${LATEST_VERSION}${NC}"
+        if [ "$CURRENT_VERSION" = "$LATEST_VERSION" ]; then
+            echo -e "${GREEN}    OK: Ja esta na versao mais recente. Download desnecessario.${NC}"
+            SKIP_DOWNLOAD=true
+        else
+            echo -e "${YELLOW}    Atualizacao disponivel: ${CURRENT_VERSION} -> ${LATEST_VERSION}${NC}"
+        fi
+    else
+        echo -e "${YELLOW}    AVISO: Nao foi possivel consultar versao remota (sem internet?).${NC}"
+        echo -e "${YELLOW}    Mantendo versao atual instalada.${NC}"
+        SKIP_DOWNLOAD=true
+    fi
 else
-    echo -e "${GRAY}    Nenhuma instalação anterior detectada. Instalação limpa.${NC}"
+    echo -e "${GRAY}    Nenhuma instalacao anterior detectada. Instalacao limpa.${NC}"
 fi
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Etapa 2: Download e instalação do binário
+# Etapa 2: Download e instalação do binário (skip se já atualizado)
 # ─────────────────────────────────────────────────────────────────────────────
+if [ "$SKIP_DOWNLOAD" = false ]; then
 echo ""
 echo -e "  ${NC}[2/4] Baixando codebase-memory-mcp (${VARIANT}, ${OS_SUFFIX}-${ARCH_SUFFIX})...${NC}"
 
@@ -232,6 +255,8 @@ chmod +x "$BIN_PATH"
 # Verificar instalação
 INSTALLED_VERSION=$("$BIN_PATH" --version 2>&1 || echo "instalado")
 echo -e "${GREEN}    OK: ${INSTALLED_VERSION} instalado em ${INSTALL_DIR}${NC}"
+
+fi # Fim do if SKIP_DOWNLOAD
 
 # Garantir que ~/.local/bin está no PATH
 if [[ ":$PATH:" != *":${INSTALL_DIR}:"* ]]; then

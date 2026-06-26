@@ -106,17 +106,17 @@ if ($Disable) {
         Copy-Item $McpBackup $McpDefault -Force
         Write-Host "[OK] Monitoramento DESABILITADO (restaurado backup)." -ForegroundColor Green
     } else {
-        # Restaurar do template original
+        # Restaurar do template original (aliases genéricos)
         $originalMcp = @'
 {
   "inputs": [],
   "servers": {
-    "codebase-memory": {
+    "code-search": {
       "type": "stdio",
       "command": "codebase-memory-mcp",
       "args": []
     },
-    "serena": {
+    "code-navigation": {
       "command": "serena",
       "args": ["start-mcp-server", "--context=vscode"]
     }

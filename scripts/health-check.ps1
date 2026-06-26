@@ -58,16 +58,16 @@ Write-Host "[4/5] Configuracao MCP IntelliJ..." -NoNewline
 $McpJsonPath = "$HOME\.config\github-copilot\intellij\mcp.json"
 if (Test-Path $McpJsonPath) {
     $content = Get-Content $McpJsonPath -Raw | ConvertFrom-Json
-    $hasCbm = $content.servers."codebase-memory" -or $content.mcpServers."codebase-memory"
-    $hasSerena = $content.servers."serena" -or $content.mcpServers."serena"
+    $hasCbm = $content.servers."code-search" -or $content.mcpServers."code-search"
+    $hasSerena = $content.servers."code-navigation" -or $content.mcpServers."code-navigation"
 
     if ($hasCbm -and $hasSerena) {
-        Write-Host " OK (codebase-memory + Serena configurados)" -ForegroundColor Green
+        Write-Host " OK (code-search + code-navigation configurados)" -ForegroundColor Green
     } elseif ($hasCbm) {
-        Write-Host " PARCIAL (codebase-memory OK, Serena nao configurado)" -ForegroundColor Yellow
+        Write-Host " PARCIAL (code-search OK, code-navigation nao configurado)" -ForegroundColor Yellow
         $AllOk = $false
     } elseif ($hasSerena) {
-        Write-Host " PARCIAL (Serena OK, codebase-memory nao configurado)" -ForegroundColor Yellow
+        Write-Host " PARCIAL (code-navigation OK, code-search nao configurado)" -ForegroundColor Yellow
         $AllOk = $false
     } else {
         Write-Host " AVISO (mcp.json existe mas servidores nao configurados)" -ForegroundColor Yellow

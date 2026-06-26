@@ -190,22 +190,41 @@ if ($Uninstall) {
 }
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# Etapa 1: Verificar se já está instalado
+# Etapa 1: Verificar se já está instalado e comparar versão
 # ═══════════════════════════════════════════════════════════════════════════════
 Write-Host "  [1/4] Verificando instalação existente..." -ForegroundColor White
 
+$skipDownload = $false
 $existingBin = Get-Command codebase-memory-mcp -ErrorAction SilentlyContinue
 if ($existingBin) {
-    $currentVersion = & $existingBin.Source --version 2>&1
-    Write-Host "    Versão atual encontrada: $currentVersion" -ForegroundColor Cyan
-    Write-Host "    Atualizando para a versão mais recente..." -ForegroundColor Cyan
+    $currentVersion = (& $existingBin.Source --version 2>&1) -replace '[^0-9.]', '' | Select-Object -First 1
+    Write-Host "    Versao local: $currentVersion" -ForegroundColor Cyan
+
+    # Consultar versao mais recente via GitHub API (leve, sem download)
+    try {
+        $releaseInfo = Invoke-RestMethod -Uri "https://api.github.com/repos/$Repo/releases/latest" -UseBasicParsing -TimeoutSec 10
+        $latestVersion = $releaseInfo.tag_name -replace '^v', ''
+        Write-Host "    Versao remota: $latestVersion" -ForegroundColor Cyan
+
+        if ($currentVersion -eq $latestVersion) {
+            Write-Host "    OK: Ja esta na versao mais recente. Download desnecessario." -ForegroundColor Green
+            $skipDownload = $true
+        } else {
+            Write-Host "    Atualizacao disponivel: $currentVersion -> $latestVersion" -ForegroundColor Yellow
+        }
+    } catch {
+        Write-Host "    AVISO: Nao foi possivel consultar versao remota (sem internet?)." -ForegroundColor Yellow
+        Write-Host "    Mantendo versao atual instalada." -ForegroundColor Yellow
+        $skipDownload = $true
+    }
 } else {
-    Write-Host "    Nenhuma instalação anterior detectada. Instalação limpa." -ForegroundColor DarkGray
+    Write-Host "    Nenhuma instalacao anterior detectada. Instalacao limpa." -ForegroundColor DarkGray
 }
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# Etapa 2: Download e instalação do binário
+# Etapa 2: Download e instalação do binário (skip se já atualizado)
 # ═══════════════════════════════════════════════════════════════════════════════
+if (-not $skipDownload) {
 Write-Host ""
 Write-Host "  [2/4] Baixando codebase-memory-mcp ($Variant)..." -ForegroundColor White
 
@@ -322,6 +341,8 @@ try {
     Remove-Item -Recurse -Force $TmpDir -ErrorAction SilentlyContinue
 }
 
+} # Fim do if (-not $skipDownload)
+
 # Adicionar ao PATH do usuário (sem admin)
 $UserPath = [Environment]::GetEnvironmentVariable("PATH", "User")
 if ($UserPath -notlike "*$InstallDir*") {
@@ -365,16 +386,16 @@ if ($mcpConfig.ContainsKey("mcpServers")) {
     $mcpConfig["servers"] = @{}
 }
 
-# Configurar o servidor codebase-memory-mcp
+# Configurar o servidor codebase-memory-mcp com alias genérico "code-search"
 # O binário aceita stdio nativamente — basta apontar o comando
-$mcpConfig[$serversKey]["codebase-memory"] = @{
+$mcpConfig[$serversKey]["code-search"] = @{
     type    = "stdio"
     command = $BinPath
     args    = @()
 }
 
-# Remover servidores antigos (mcp-vector-search) se existirem
-foreach ($oldServer in @("local-code-rag", "workspace-code-rag", "mcp-vector-search", "vector-search")) {
+# Remover servidores antigos (mcp-vector-search e nome literal anterior) se existirem
+foreach ($oldServer in @("local-code-rag", "workspace-code-rag", "mcp-vector-search", "vector-search", "codebase-memory")) {
     if ($mcpConfig[$serversKey].ContainsKey($oldServer)) {
         $mcpConfig[$serversKey].Remove($oldServer)
         Write-Host "    Removido servidor legado: $oldServer" -ForegroundColor DarkGray
@@ -383,7 +404,7 @@ foreach ($oldServer in @("local-code-rag", "workspace-code-rag", "mcp-vector-sea
 
 # Salvar configuração
 $mcpConfig | ConvertTo-Json -Depth 10 | Set-Content $McpJsonPath -Encoding UTF8
-Write-Host "    OK: mcp.json atualizado com servidor 'codebase-memory'" -ForegroundColor Green
+Write-Host "    OK: mcp.json atualizado com servidor 'code-search'" -ForegroundColor Green
 Write-Host "    Arquivo: $McpJsonPath" -ForegroundColor DarkGray
 
 # Habilitar auto-index se solicitado
@@ -470,7 +491,7 @@ Write-Host "║                                                              ║
 Write-Host "║  1. Reinicie o IntelliJ IDEA                                ║" -ForegroundColor Green
 Write-Host "║                                                              ║" -ForegroundColor Green
 Write-Host "║  2. No Copilot Chat (Agent Mode), verifique se              ║" -ForegroundColor Green
-Write-Host "║     'codebase-memory' aparece em Tools                      ║" -ForegroundColor Green
+Write-Host "║     'code-search' aparece em Tools                          ║" -ForegroundColor Green
 Write-Host "║                                                              ║" -ForegroundColor Green
 Write-Host "║  3. Diga ao agente: 'Index this project'                    ║" -ForegroundColor Green
 Write-Host "║     (ou o índice será criado na primeira busca)             ║" -ForegroundColor Green

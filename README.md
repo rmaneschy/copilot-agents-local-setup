@@ -95,7 +95,7 @@ Este é o passo a passo completo para configurar uma máquina nova do zero. Siga
 
 | Passo | Comando | Tempo | Descrição |
 |:---:|:---|:---:|:---|
-| 1 | `task install-code-search` | ~2 min | Baixa binário estático (~15MB), instala no PATH do usuário, configura `mcp.json` |
+| 1 | `task install-code-search` | ~2 min | Verifica versão local vs remota (skip se já atualizado), baixa binário estático (~15MB), instala no PATH do usuário, configura `mcp.json` |
 | 2 | `task install-code-navigation` | ~3 min | Instala `uv` + Serena MCP (LSP server) sem admin |
 | 3 | `task install-observability` | ~3 min | Instala Arize Phoenix (observabilidade) e inicia o servidor local |
 | 4 | `task index` | ~5 min* | Descobre repos via `.git` e indexa o knowledge graph (*varia com tamanho do workspace) |
@@ -245,6 +245,8 @@ task index-repo -- nome-do-novo-repo
 ```
 
 ### Cenário C: Atualização dos componentes
+
+Os scripts de instalação possuem **detecção inteligente de versão**: antes de baixar qualquer binário, consultam a versão mais recente disponível via GitHub API e comparam com a versão local instalada. Se já estiver na versão mais recente, o download é automaticamente ignorado (*skip*). Caso não haja conexão com a internet, a versão atual é mantida sem erro.
 
 ```bash
 # Via Taskfile (detecta OS automaticamente)
