@@ -1,4 +1,4 @@
-<#
+﻿<#
 .SYNOPSIS
 Indexa repositórios Git individualmente percorrendo o workspace de forma recursiva.
 

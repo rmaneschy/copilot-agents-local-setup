@@ -1,4 +1,4 @@
-<#
+﻿<#
 .SYNOPSIS
 Aplica configurações otimizadas do Ollama com base no perfil de hardware detectado.
 
@@ -517,9 +517,11 @@ Write-Host "║                                                              ║
 Write-Host "║  Perfil:          $($Profile.ToUpper().PadRight(38))║" -ForegroundColor Green
 Write-Host "║  Context Window:  $($ProfileDetails.ContextDesc.PadRight(38))║" -ForegroundColor Green
 Write-Host "║  KV Cache:        $($OllamaConfig['OLLAMA_KV_CACHE_TYPE'].PadRight(38))║" -ForegroundColor Green
-Write-Host "║  Flash Attention: Habilitado$("".PadRight(29))║" -ForegroundColor Green
-Write-Host "║  Paralelismo:     $("$($OllamaConfig['OLLAMA_NUM_PARALLEL']) requisições simultâneas".PadRight(38))║" -ForegroundColor Green
-Write-Host "║  Keep Alive:      $(if($OllamaConfig['OLLAMA_KEEP_ALIVE'] -eq '-1'){"Permanente (modelo sempre carregado)"}else{$OllamaConfig['OLLAMA_KEEP_ALIVE']})$("".PadRight(0))║" -ForegroundColor Green
+Write-Host ("║  Flash Attention: Habilitado" + "".PadRight(29) + "║") -ForegroundColor Green
+$parallelStr = "$($OllamaConfig['OLLAMA_NUM_PARALLEL']) requisições simultâneas"
+Write-Host ("║  Paralelismo:     " + $parallelStr.PadRight(38) + "║") -ForegroundColor Green
+$keepAliveStr = if ($OllamaConfig['OLLAMA_KEEP_ALIVE'] -eq '-1') { "Permanente (modelo sempre carregado)" } else { $OllamaConfig['OLLAMA_KEEP_ALIVE'] }
+Write-Host ("║  Keep Alive:      " + $keepAliveStr.PadRight(38) + "║") -ForegroundColor Green
 Write-Host "║                                                              ║" -ForegroundColor Green
 Write-Host "║  Modelo sugerido: ollama pull $($ProfileDetails.RecommendedModel.PadRight(26))║" -ForegroundColor Green
 Write-Host "║                                                              ║" -ForegroundColor Green

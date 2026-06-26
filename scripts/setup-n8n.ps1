@@ -1,4 +1,4 @@
-<#
+﻿<#
 .SYNOPSIS
 Script de instalação e configuração do n8n como orquestrador visual de agentes.
 

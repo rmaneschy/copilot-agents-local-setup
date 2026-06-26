@@ -1,4 +1,4 @@
-<#
+﻿<#
 .SYNOPSIS
 Script de instalação e execução do MCP Inspector para teste e debug de servidores MCP.
 

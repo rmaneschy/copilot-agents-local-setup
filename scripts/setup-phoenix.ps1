@@ -1,4 +1,4 @@
-<#
+﻿<#
 .SYNOPSIS
     Instala e configura o Arize Phoenix para observabilidade de agentes MCP.
 

@@ -1,4 +1,4 @@
-<#
+﻿<#
 .SYNOPSIS
 Workaround para ambientes com proxy corporativo que realiza inspeção SSL/TLS.
 

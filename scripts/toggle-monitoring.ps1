@@ -1,4 +1,4 @@
-<#
+﻿<#
 .SYNOPSIS
     Habilita ou desabilita o monitoramento de ferramentas MCP.
 

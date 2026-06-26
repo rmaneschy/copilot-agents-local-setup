@@ -1,4 +1,4 @@
-<#
+﻿<#
 .SYNOPSIS
     Aplica otimizações de desempenho ao ambiente de code intelligence local.
 

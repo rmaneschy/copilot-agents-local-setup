@@ -1,4 +1,4 @@
-<#
+﻿<#
 .SYNOPSIS
     Instala e configura o codebase-memory-mcp para code intelligence via knowledge graph.
 

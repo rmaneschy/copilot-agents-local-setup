@@ -1,4 +1,4 @@
-<#
+﻿<#
 .SYNOPSIS
     Instala e configura o Serena MCP para integração com GitHub Copilot no IntelliJ.
 

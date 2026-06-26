@@ -1,4 +1,4 @@
-<#
+﻿<#
 .SYNOPSIS
 Verifica o estado de saúde de todos os componentes do code intelligence local.
 

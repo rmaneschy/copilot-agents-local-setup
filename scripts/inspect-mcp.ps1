@@ -1,4 +1,4 @@
-<#
+﻿<#
 .SYNOPSIS
 Atalho rápido para inspecionar todos os servidores MCP configurados no projeto.
 

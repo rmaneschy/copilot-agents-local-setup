@@ -1,4 +1,4 @@
-<#
+﻿<#
 .SYNOPSIS
     Gera um dashboard HTML estático a partir dos logs de uso das ferramentas MCP.
 
