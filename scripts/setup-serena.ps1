@@ -234,110 +234,82 @@ if ($ForceReinstall) {
 }
 
 if ($useUv) {
-    # ─────────────────────────────────────────────────────────────────────────
-    # Tentativa 1: uv tool install com workarounds
-    # ─────────────────────────────────────────────────────────────────────────
-    Write-Host "    Tentativa 1: uv tool install com UV_LINK_MODE=copy..." -ForegroundColor DarkGray
-
-    # Temporariamente reduzir ErrorActionPreference para evitar NativeCommandError
-    # no PowerShell 5.1 (uv emite warnings/info no stderr)
-    $prevEAP = $ErrorActionPreference
-    $ErrorActionPreference = "Continue"
-
-    try {
-        $output = & uv tool install -p 3.13 serena-agent 2>&1
-        $uvExitCode = $LASTEXITCODE
-        $ErrorActionPreference = $prevEAP
-
-        if ($uvExitCode -eq 0) {
-            Write-Host "    OK: Serena instalado com sucesso via uv!" -ForegroundColor Green
-            $serenaInstalled = $true
-        } else {
-            $outputStr = $output -join "`n"
-            throw "Exit code: $uvExitCode - $outputStr"
+    # ─────────────────────────────────────────────────────────────────────────────
+    # Função auxiliar: executa comando nativo isolando stderr do PowerShell 5.1
+    # Usa Start-Process para evitar NativeCommandError com 2>&1
+    # ─────────────────────────────────────────────────────────────────────────────
+    function Invoke-NativeCommand {
+        param(
+            [string]$Command,
+            [string[]]$Arguments
+        )
+        $stdoutFile = [System.IO.Path]::GetTempFileName()
+        $stderrFile = [System.IO.Path]::GetTempFileName()
+        try {
+            $proc = Start-Process -FilePath $Command -ArgumentList $Arguments `
+                -NoNewWindow -Wait -PassThru `
+                -RedirectStandardOutput $stdoutFile `
+                -RedirectStandardError $stderrFile
+            return @{
+                ExitCode = $proc.ExitCode
+                Stdout   = (Get-Content $stdoutFile -Raw -ErrorAction SilentlyContinue)
+                Stderr   = (Get-Content $stderrFile -Raw -ErrorAction SilentlyContinue)
+            }
+        } finally {
+            Remove-Item $stdoutFile, $stderrFile -Force -ErrorAction SilentlyContinue
         }
     }
-    catch {
-        $ErrorActionPreference = $prevEAP
-        $errorMsg = $_.Exception.Message
-        $outputStr = if ($output) { $output -join "`n" } else { $errorMsg }
 
-        # Verificar se é o erro específico de trampoline/PE resources
-        if ($outputStr -match "trampoline|PE resources|Access.+denied|Acesso.+negado") {
+    # ─────────────────────────────────────────────────────────────────────────────
+    # Tentativa 1: uv tool install
+    # ─────────────────────────────────────────────────────────────────────────────
+    Write-Host "    Tentativa 1: uv tool install com UV_LINK_MODE=copy..." -ForegroundColor DarkGray
+
+    $uvPath = (Get-Command uv -ErrorAction SilentlyContinue).Source
+    $result = Invoke-NativeCommand -Command $uvPath -Arguments @("tool", "install", "-p", "3.13", "serena-agent")
+
+    if ($result.ExitCode -eq 0) {
+        Write-Host "    OK: Serena instalado com sucesso via uv!" -ForegroundColor Green
+        $serenaInstalled = $true
+    } else {
+        $combinedOutput = "$($result.Stdout)`n$($result.Stderr)"
+
+        if ($combinedOutput -match "trampoline|PE resources|Access.+denied|Acesso.+negado") {
             Write-Host "    AVISO: Erro de trampoline/PE resources detectado." -ForegroundColor Yellow
             Write-Host "    Causa: Política de segurança corporativa bloqueia criação de .exe" -ForegroundColor Yellow
             Write-Host ""
 
-            # ─────────────────────────────────────────────────────────────────
             # Tentativa 2: uv com --python-preference system
-            # ─────────────────────────────────────────────────────────────────
             Write-Host "    Tentativa 2: uv com Python do sistema (sem trampoline)..." -ForegroundColor DarkGray
+            $result2 = Invoke-NativeCommand -Command $uvPath -Arguments @("tool", "install", "-p", "3.13", "serena-agent", "--python-preference", "system")
 
-            $ErrorActionPreference = "Continue"
-            try {
-                $output2 = & uv tool install -p 3.13 serena-agent --python-preference system 2>&1
-                $uv2ExitCode = $LASTEXITCODE
-                $ErrorActionPreference = $prevEAP
-
-                if ($uv2ExitCode -eq 0) {
-                    Write-Host "    OK: Serena instalado via uv (Python do sistema)!" -ForegroundColor Green
-                    $serenaInstalled = $true
-                } else {
-                    throw "Exit code: $uv2ExitCode"
-                }
-            }
-            catch {
-                $ErrorActionPreference = $prevEAP
+            if ($result2.ExitCode -eq 0) {
+                Write-Host "    OK: Serena instalado via uv (Python do sistema)!" -ForegroundColor Green
+                $serenaInstalled = $true
+            } else {
                 Write-Host "    Tentativa 2 falhou. Usando pipx como fallback..." -ForegroundColor Yellow
                 $useUv = $false
                 $installMethod = "pipx"
             }
-        }
-        elseif ($outputStr -match "already installed|is already installed") {
-            # Já instalado — tentar upgrade
-            Write-Host "    Serena já instalado. Tentando upgrade..." -ForegroundColor Gray
-            $ErrorActionPreference = "Continue"
-            try {
-                $upgradeOutput = & uv tool upgrade serena-agent 2>&1
-                $upgradeExitCode = $LASTEXITCODE
-                $ErrorActionPreference = $prevEAP
-
-                if ($upgradeExitCode -eq 0) {
-                    Write-Host "    OK: Serena atualizado com sucesso!" -ForegroundColor Green
-                    $serenaInstalled = $true
-                } else {
-                    # Já está na última versão
-                    Write-Host "    OK: Serena já está na versão mais recente." -ForegroundColor Green
-                    $serenaInstalled = $true
-                }
-            }
-            catch {
-                $ErrorActionPreference = $prevEAP
-                Write-Host "    OK: Serena já instalado (upgrade não necessário)." -ForegroundColor Green
-                $serenaInstalled = $true
-            }
-        }
-        else {
-            # Erro genérico — tentar upgrade antes de fallback
+        } else {
+            # Provavelmente já instalado — tentar upgrade
             Write-Host "    Tentando upgrade de instalação existente..." -ForegroundColor Gray
-            $ErrorActionPreference = "Continue"
-            try {
-                $upgradeOutput = & uv tool upgrade serena-agent 2>&1
-                $upgradeExitCode = $LASTEXITCODE
-                $ErrorActionPreference = $prevEAP
+            $upgradeResult = Invoke-NativeCommand -Command $uvPath -Arguments @("tool", "upgrade", "serena-agent")
 
-                if ($upgradeExitCode -eq 0) {
-                    Write-Host "    OK: Serena atualizado com sucesso!" -ForegroundColor Green
+            if ($upgradeResult.ExitCode -eq 0) {
+                Write-Host "    OK: Serena atualizado com sucesso!" -ForegroundColor Green
+                $serenaInstalled = $true
+            } else {
+                # Verificar se o binário já existe e funciona
+                $serenaCmd = Get-Command serena-agent -ErrorAction SilentlyContinue
+                if ($serenaCmd) {
+                    Write-Host "    OK: Serena já está instalado e funcional." -ForegroundColor Green
                     $serenaInstalled = $true
                 } else {
-                    throw "Upgrade falhou"
+                    Write-Host "    AVISO: uv falhou. Usando pipx como fallback..." -ForegroundColor Yellow
+                    $useUv = $false
+                    $installMethod = "pipx"
                 }
-            }
-            catch {
-                $ErrorActionPreference = $prevEAP
-                Write-Host "    AVISO: uv falhou. Usando pipx como fallback..." -ForegroundColor Yellow
-                $useUv = $false
-                $installMethod = "pipx"
             }
         }
     }
@@ -351,60 +323,96 @@ if (-not $serenaInstalled) {
     Write-Host "    Fallback: Instalando via pipx (sem trampolines)..." -ForegroundColor Yellow
     Write-Host "    O pipx copia executáveis diretamente, evitando o problema de PE resources." -ForegroundColor DarkGray
 
-    # Verificar pipx
-    $pipxPath = Get-Command pipx -ErrorAction SilentlyContinue
-    if (-not $pipxPath) {
-        $pythonCmd = Get-Command python -ErrorAction SilentlyContinue
-        if (-not $pythonCmd) { $pythonCmd = Get-Command python3 -ErrorAction SilentlyContinue }
-        if ($pythonCmd) {
-            # Usar $ErrorActionPreference local para evitar NativeCommandError
-            # no PowerShell 5.1 (pip emite warnings no stderr)
-            $prevEAP = $ErrorActionPreference
-            $ErrorActionPreference = "Continue"
+    # Verificar pipx (usar Invoke-NativeCommand se disponível, senão definir)
+    if (-not (Get-Command Invoke-NativeCommand -ErrorAction SilentlyContinue)) {
+        function Invoke-NativeCommand {
+            param([string]$Command, [string[]]$Arguments)
+            $stdoutFile = [System.IO.Path]::GetTempFileName()
+            $stderrFile = [System.IO.Path]::GetTempFileName()
             try {
-                $pipOutput = & $pythonCmd.Source -m pip install --user pipx 2>&1
-                $pipxPathOutput = & $pythonCmd.Source -m pipx ensurepath 2>&1
-            } catch {
-                # Ignorar erros de pip/pipx na instalação
+                $proc = Start-Process -FilePath $Command -ArgumentList $Arguments `
+                    -NoNewWindow -Wait -PassThru `
+                    -RedirectStandardOutput $stdoutFile `
+                    -RedirectStandardError $stderrFile
+                return @{
+                    ExitCode = $proc.ExitCode
+                    Stdout   = (Get-Content $stdoutFile -Raw -ErrorAction SilentlyContinue)
+                    Stderr   = (Get-Content $stderrFile -Raw -ErrorAction SilentlyContinue)
+                }
             } finally {
-                $ErrorActionPreference = $prevEAP
+                Remove-Item $stdoutFile, $stderrFile -Force -ErrorAction SilentlyContinue
             }
-            $env:PATH = "$env:USERPROFILE\.local\bin;$env:USERPROFILE\AppData\Roaming\Python\Python311\Scripts;$env:PATH"
         }
     }
 
-    try {
-        $pipxOutput = & pipx install serena-agent --python python3.13 2>&1
-        if ($LASTEXITCODE -eq 0) {
+    $pipxCmd = Get-Command pipx -ErrorAction SilentlyContinue
+    if (-not $pipxCmd) {
+        $pythonCmd = Get-Command python -ErrorAction SilentlyContinue
+        if (-not $pythonCmd) { $pythonCmd = Get-Command python3 -ErrorAction SilentlyContinue }
+        if ($pythonCmd) {
+            Write-Host "    Instalando pipx via pip..." -ForegroundColor DarkGray
+            $pipResult = Invoke-NativeCommand -Command $pythonCmd.Source -Arguments @("-m", "pip", "install", "--user", "pipx")
+            $ensureResult = Invoke-NativeCommand -Command $pythonCmd.Source -Arguments @("-m", "pipx", "ensurepath")
+            # Adicionar possíveis paths do pipx
+            $env:PATH = "$env:USERPROFILE\.local\bin;$env:USERPROFILE\AppData\Roaming\Python\Python311\Scripts;$env:USERPROFILE\AppData\Roaming\Python\Python313\Scripts;$env:PATH"
+        }
+        $pipxCmd = Get-Command pipx -ErrorAction SilentlyContinue
+    }
+
+    if ($pipxCmd) {
+        $pipxResult = Invoke-NativeCommand -Command $pipxCmd.Source -Arguments @("install", "serena-agent", "--python", "python3.13")
+
+        if ($pipxResult.ExitCode -eq 0) {
             Write-Host "    OK: Serena instalado com sucesso via pipx!" -ForegroundColor Green
             $serenaInstalled = $true
         } else {
-            # Tentar sem especificar versão do Python
-            $pipxOutput2 = & pipx install serena-agent 2>&1
-            if ($LASTEXITCODE -eq 0) {
-                Write-Host "    OK: Serena instalado via pipx (Python padrão)!" -ForegroundColor Green
+            $pipxCombined = "$($pipxResult.Stdout)`n$($pipxResult.Stderr)"
+
+            if ($pipxCombined -match "already.+installed|already seems to be installed") {
+                Write-Host "    OK: Serena já está instalado via pipx." -ForegroundColor Green
                 $serenaInstalled = $true
             } else {
-                throw "pipx install falhou: $pipxOutput2"
+                # Tentar sem especificar versão do Python
+                $pipxResult2 = Invoke-NativeCommand -Command $pipxCmd.Source -Arguments @("install", "serena-agent")
+                if ($pipxResult2.ExitCode -eq 0) {
+                    Write-Host "    OK: Serena instalado via pipx (Python padrão)!" -ForegroundColor Green
+                    $serenaInstalled = $true
+                } else {
+                    $pipx2Combined = "$($pipxResult2.Stdout)`n$($pipxResult2.Stderr)"
+                    if ($pipx2Combined -match "already.+installed|already seems to be installed") {
+                        Write-Host "    OK: Serena já está instalado via pipx." -ForegroundColor Green
+                        $serenaInstalled = $true
+                    }
+                }
             }
         }
     }
-    catch {
+
+    # Última verificação: o binário existe no PATH?
+    if (-not $serenaInstalled) {
+        $serenaCmd = Get-Command serena-agent -ErrorAction SilentlyContinue
+        if ($serenaCmd) {
+            Write-Host "    OK: Serena encontrado em $($serenaCmd.Source)" -ForegroundColor Green
+            $serenaInstalled = $true
+        }
+    }
+
+    if (-not $serenaInstalled) {
         Write-Host ""
-        Write-Host "    ╔══════════════════════════════════════════════════════════════╗" -ForegroundColor Red
-        Write-Host "    ║  ERRO: Todas as tentativas de instalação falharam.          ║" -ForegroundColor Red
-        Write-Host "    ╚══════════════════════════════════════════════════════════════╝" -ForegroundColor Red
+        Write-Host "    +--------------------------------------------------------------+" -ForegroundColor Red
+        Write-Host "    |  ERRO: Todas as tentativas de instalacao falharam.           |" -ForegroundColor Red
+        Write-Host "    +--------------------------------------------------------------+" -ForegroundColor Red
         Write-Host ""
-        Write-Host "    O ambiente corporativo está bloqueando a criação de executáveis." -ForegroundColor Yellow
+        Write-Host "    O ambiente corporativo esta bloqueando a criacao de executaveis." -ForegroundColor Yellow
         Write-Host ""
-        Write-Host "    Soluções manuais:" -ForegroundColor White
-        Write-Host "      1. Solicitar ao TI a liberação do diretório:" -ForegroundColor Gray
+        Write-Host "    Solucoes manuais:" -ForegroundColor White
+        Write-Host "      1. Solicitar ao TI a liberacao do diretorio:" -ForegroundColor Gray
         Write-Host "         $env:USERPROFILE\.local\bin" -ForegroundColor DarkGray
         Write-Host ""
         Write-Host "      2. Habilitar Long Paths (requer admin pontual):" -ForegroundColor Gray
         Write-Host "         reg add HKLM\SYSTEM\CurrentControlSet\Control\FileSystem /v LongPathsEnabled /t REG_DWORD /d 1 /f" -ForegroundColor DarkGray
         Write-Host ""
-        Write-Host "      3. Adicionar exclusão no antivírus para:" -ForegroundColor Gray
+        Write-Host "      3. Adicionar exclusao no antivirus para:" -ForegroundColor Gray
         Write-Host "         $env:USERPROFILE\.local\bin\*.exe" -ForegroundColor DarkGray
         Write-Host "         $env:USERPROFILE\.uv\tools\**\*.exe" -ForegroundColor DarkGray
         Write-Host ""
