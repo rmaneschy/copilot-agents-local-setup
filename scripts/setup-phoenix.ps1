@@ -410,28 +410,74 @@ if ($Start) {
 
     # Verificar se porta já está em uso
     if (Test-PortInUse -PortNumber $Port) {
-        Write-Warn "Porta $Port já está em uso. Phoenix pode já estar rodando."
+        Write-Warn "Porta $Port ja esta em uso. Phoenix pode ja estar rodando."
         Write-Host "  Acesse: http://localhost:$Port"
         exit 0
     }
 
-    # Iniciar em background
-    $serveArgs = @("-m", "phoenix.server.main", "serve")
-    if ($script:PythonArgs) { $serveArgs = @($script:PythonArgs) + $serveArgs }
-    $phoenixProcess = Start-Process -FilePath $script:PythonExe -ArgumentList $serveArgs `
-        -WindowStyle Hidden `
-        -PassThru `
-        -RedirectStandardOutput $PhoenixLogFile `
-        -RedirectStandardError (Join-Path $WorkingDir "phoenix-error.log")
+    # Garantir que as variaveis de ambiente estejam na sessao atual
+    $env:PHOENIX_PORT = $Port.ToString()
+    $env:PHOENIX_GRPC_PORT = $GrpcPort.ToString()
+    $env:PHOENIX_WORKING_DIR = $WorkingDir
+    $env:PHOENIX_COLLECTOR_ENDPOINT = "http://localhost:$Port"
+    $env:PHOENIX_PROJECT_NAME = $ProjectName
+    $env:PHOENIX_TELEMETRY_ENABLED = "false"
+    if ($AirGapped) {
+        $env:PHOENIX_ALLOW_EXTERNAL_RESOURCES = "false"
+        $env:PHOENIX_ALLOWED_PROVIDERS = "OLLAMA"
+    }
+
+    # Iniciar em background usando 'phoenix serve' (CLI instalado pelo pip)
+    # Nota: Start-Process herda as env vars da sessao atual
+    $phoenixErrorLog = Join-Path $WorkingDir "phoenix-error.log"
+    $serveArgs = @("serve")
+
+    # Tentar usar o CLI 'phoenix' diretamente (instalado pelo pip no PATH)
+    $phoenixCli = Get-Command phoenix -ErrorAction SilentlyContinue
+    if ($phoenixCli) {
+        $phoenixProcess = Start-Process -FilePath $phoenixCli.Source -ArgumentList $serveArgs `
+            -WindowStyle Hidden `
+            -PassThru `
+            -RedirectStandardOutput $PhoenixLogFile `
+            -RedirectStandardError $phoenixErrorLog
+    } else {
+        # Fallback: python -m phoenix.server.main serve
+        $serveArgs = @("-m", "phoenix.server.main", "serve")
+        if ($script:PythonArgs) { $serveArgs = @($script:PythonArgs) + $serveArgs }
+        $phoenixProcess = Start-Process -FilePath $script:PythonExe -ArgumentList $serveArgs `
+            -WindowStyle Hidden `
+            -PassThru `
+            -RedirectStandardOutput $PhoenixLogFile `
+            -RedirectStandardError $phoenixErrorLog
+    }
 
     # Salvar PID
     $phoenixProcess.Id | Set-Content -Path $PhoenixPidFile
+    Write-Host "  PID: $($phoenixProcess.Id)" -ForegroundColor DarkGray
 
-    # Aguardar inicialização
-    Write-Host "  Aguardando inicialização..." -NoNewline
-    $maxWait = 15
+    # Aguardar inicializacao (primeiro start pode demorar: cria DB SQLite + schemas)
+    Write-Host "  Aguardando inicializacao (max 30s)..." -NoNewline
+    $maxWait = 30
     $waited = 0
     while (-not (Test-PortInUse -PortNumber $Port) -and $waited -lt $maxWait) {
+        # Verificar se o processo morreu prematuramente
+        $proc = Get-Process -Id $phoenixProcess.Id -ErrorAction SilentlyContinue
+        if (-not $proc) {
+            Write-Host ""
+            Write-Fail "Processo Phoenix encerrou prematuramente (PID $($phoenixProcess.Id))."
+            if (Test-Path $phoenixErrorLog) {
+                Write-Host ""
+                Write-Host "  Ultimas linhas do log de erro:" -ForegroundColor Yellow
+                Get-Content $phoenixErrorLog -Tail 10 | ForEach-Object {
+                    Write-Host "    $_" -ForegroundColor DarkGray
+                }
+            }
+            Write-Host ""
+            Write-Host "  Logs completos:" -ForegroundColor White
+            Write-Host "    stdout: $PhoenixLogFile" -ForegroundColor DarkGray
+            Write-Host "    stderr: $phoenixErrorLog" -ForegroundColor DarkGray
+            exit 1
+        }
         Start-Sleep -Seconds 1
         $waited++
         Write-Host "." -NoNewline
@@ -439,10 +485,23 @@ if ($Start) {
     Write-Host ""
 
     if (Test-PortInUse -PortNumber $Port) {
-        Write-Success "Phoenix iniciado com sucesso!"
+        Write-Success "Phoenix iniciado com sucesso! (${waited}s)"
+        Write-Host "  UI: http://localhost:$Port" -ForegroundColor DarkGray
+        Write-Host "  OTLP HTTP: http://localhost:$Port/v1/traces" -ForegroundColor DarkGray
+        Write-Host "  OTLP gRPC: localhost:$GrpcPort" -ForegroundColor DarkGray
     } else {
-        Write-Fail "Phoenix não respondeu em ${maxWait}s. Verifique: $PhoenixLogFile"
-        exit 1
+        Write-Warn "Phoenix nao respondeu em ${maxWait}s na porta $Port."
+        Write-Host "  O servidor pode ainda estar inicializando (primeiro start e mais lento)." -ForegroundColor Yellow
+        Write-Host ""
+        Write-Host "  Verifique manualmente:" -ForegroundColor White
+        Write-Host "    curl http://localhost:$Port" -ForegroundColor DarkGray
+        Write-Host "    Get-Content $PhoenixLogFile -Tail 20" -ForegroundColor DarkGray
+        Write-Host "    Get-Content $phoenixErrorLog -Tail 20" -ForegroundColor DarkGray
+        Write-Host ""
+        Write-Host "  Se o processo ainda estiver rodando, aguarde mais alguns segundos." -ForegroundColor Yellow
+        Write-Host "  Para parar: .\scripts\setup-phoenix.ps1 -Stop" -ForegroundColor DarkGray
+        # Nao usar exit 1 aqui pois o processo pode estar apenas lento
+        exit 0
     }
 }
 
