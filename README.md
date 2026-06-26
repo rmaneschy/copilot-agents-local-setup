@@ -14,7 +14,7 @@ A integração principal ocorre com o **IntelliJ IDEA** (e opcionalmente VS Code
 
 | Requisito | Windows | Linux |
 |:---|:---|:---|
-| **Python 3.10+** | Instalado via Microsoft Store ou `winget` | `python3` (pré-instalado na maioria das distros) |
+| **Python 3.10–3.13** | Instalado via Microsoft Store ou `winget` (recomendado: 3.12 para melhor compatibilidade de wheels) | `python3` (pré-instalado na maioria das distros) |
 | **Git** | Git for Windows | `git` (pré-instalado) |
 | **IntelliJ IDEA** | Com plugin GitHub Copilot | Com plugin GitHub Copilot |
 | **Internet** | Apenas na primeira execução | Apenas na primeira execução |
@@ -218,6 +218,7 @@ task check
 | "Connection refused" | **Windows:** `where.exe codebase-memory-mcp` / **Linux:** `which codebase-memory-mcp` |
 | Tools aparecem mas não retornam resultados | Executar `task index` para indexar o workspace |
 | Phoenix não recebe traces | Verificar se o `mcp.json` usa a versão com `--phoenix` e se Phoenix está rodando (`task status-phoenix`) |
+| `pip install` falha com `subprocess-exited-with-error` | Python 3.14+ pode não ter wheels pré-compiladas. Instale Python 3.12: `winget install Python.Python.3.12`. O script usará automaticamente via `py -3.12`. |
 
 ---
 

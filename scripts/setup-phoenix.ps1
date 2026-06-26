@@ -120,15 +120,61 @@ function Write-Fail {
 }
 
 function Test-PythonAvailable {
-    $pythonCmd = Get-Command python -ErrorAction SilentlyContinue
-    if (-not $pythonCmd) {
-        $pythonCmd = Get-Command python3 -ErrorAction SilentlyContinue
+    # Ordem de preferência: py -3.12 > py -3.13 > py -3 > python > python3
+    # Prioriza 3.12 porque é a versão com melhor compatibilidade de wheels
+    $candidates = @()
+
+    # Tentar py launcher (Windows) com versões específicas
+    $pyLauncher = Get-Command py -ErrorAction SilentlyContinue
+    if ($pyLauncher) {
+        foreach ($ver in @("3.12", "3.13", "3.11", "3.10", "3.14")) {
+            try {
+                $testOutput = & py "-$ver" --version 2>$null
+                if ($LASTEXITCODE -eq 0 -and $testOutput) {
+                    $candidates += @{ Command = "py"; Args = "-$ver"; Version = $ver; Display = $testOutput }
+                }
+            } catch { }
+        }
     }
-    if (-not $pythonCmd) {
-        Write-Fail "Python não encontrado. Instale Python 3.9+ antes de continuar."
+
+    # Tentar python/python3 diretamente
+    foreach ($cmd in @("python", "python3")) {
+        $pythonCmd = Get-Command $cmd -ErrorAction SilentlyContinue
+        if ($pythonCmd) {
+            $candidates += @{ Command = $pythonCmd.Source; Args = $null; Version = $null; Display = $null }
+        }
+    }
+
+    if ($candidates.Count -eq 0) {
+        Write-Fail "Python nao encontrado. Instale Python 3.10+ antes de continuar."
         exit 1
     }
-    return $pythonCmd.Source
+
+    # Selecionar o melhor candidato (primeiro da lista de prioridade)
+    $selected = $candidates[0]
+    if ($selected.Args) {
+        # Retornar como array para uso posterior: py -3.12
+        $script:PythonArgs = $selected.Args
+        return $selected.Command
+    } else {
+        $script:PythonArgs = $null
+        return $selected.Command
+    }
+}
+
+function Invoke-Python {
+    param([string[]]$Arguments)
+    if ($script:PythonArgs) {
+        $allArgs = @($script:PythonArgs) + $Arguments
+        & $script:PythonExe @allArgs
+    } else {
+        & $script:PythonExe @Arguments
+    }
+}
+
+function Get-PythonVersion {
+    $versionOutput = Invoke-Python @("--version")
+    return $versionOutput
 }
 
 function Get-PhoenixProcess {
@@ -166,12 +212,12 @@ if ($Status) {
     }
 
     # Verificar instalação
-    $python = Test-PythonAvailable
-    $installed = & $python -c "import phoenix; print(phoenix.__version__)" 2>$null
+    $script:PythonExe = Test-PythonAvailable
+    $installed = Invoke-Python @("-c", "import phoenix; print(phoenix.__version__)") 2>$null
     if ($installed) {
         Write-Success "Phoenix instalado: v$installed"
     } else {
-        Write-Warn "Phoenix não está instalado"
+        Write-Warn "Phoenix nao esta instalado"
     }
     exit 0
 }
@@ -221,9 +267,12 @@ Write-Host ""
 
 # 1. Verificar Python
 Write-Step "Verificando Python..."
-$python = Test-PythonAvailable
-$pyVersion = & $python --version 2>&1
+$script:PythonExe = Test-PythonAvailable
+$pyVersion = Get-PythonVersion
 Write-Success "Python encontrado: $pyVersion"
+if ($script:PythonArgs) {
+    Write-Host "    Usando: $($script:PythonExe) $($script:PythonArgs)" -ForegroundColor DarkGray
+}
 
 # 2. Criar diretório de trabalho
 Write-Step "Criando diretório de trabalho..."
@@ -235,11 +284,14 @@ Write-Success "Working dir: $WorkingDir"
 # 3. Instalar/Atualizar Phoenix
 Write-Step "Instalando Arize Phoenix..."
 
-$pipArgs = @("install")
+$pipArgs = @("-m", "pip", "install")
 if ($Upgrade) {
     $pipArgs += "--upgrade"
 }
 $pipArgs += @(
+    "--quiet",
+    "--disable-pip-version-check",
+    "--only-binary", ":all:",
     "arize-phoenix",
     "arize-phoenix-otel>=0.16.0",
     "opentelemetry-api",
@@ -247,12 +299,51 @@ $pipArgs += @(
     "opentelemetry-exporter-otlp-proto-http"
 )
 
-& $python -m pip $pipArgs --quiet --disable-pip-version-check 2>&1 | Out-Null
+# Usar Start-Process para evitar NativeCommandError no PS 5.1
+$pipLogFile = Join-Path $WorkingDir "pip-install.log"
+$pipErrFile = Join-Path $WorkingDir "pip-install-error.log"
+
+$pipProcess = Start-Process -FilePath $script:PythonExe `
+    -ArgumentList ((@($script:PythonArgs) + $pipArgs) | Where-Object { $_ }) `
+    -NoNewWindow -Wait -PassThru `
+    -RedirectStandardOutput $pipLogFile `
+    -RedirectStandardError $pipErrFile
+
+if ($pipProcess.ExitCode -ne 0) {
+    # Tentar novamente sem --only-binary (permite compilacao se tiver build tools)
+    Write-Warn "Falha com --only-binary. Tentando sem restricao de wheels..."
+    $pipArgs = $pipArgs | Where-Object { $_ -ne "--only-binary" -and $_ -ne ":all:" }
+
+    $pipProcess = Start-Process -FilePath $script:PythonExe `
+        -ArgumentList ((@($script:PythonArgs) + $pipArgs) | Where-Object { $_ }) `
+        -NoNewWindow -Wait -PassThru `
+        -RedirectStandardOutput $pipLogFile `
+        -RedirectStandardError $pipErrFile
+
+    if ($pipProcess.ExitCode -ne 0) {
+        Write-Fail "Falha na instalacao do Phoenix."
+        Write-Host ""
+        Write-Host "  Causa provavel: Python $pyVersion nao possui wheels pre-compiladas" -ForegroundColor Yellow
+        Write-Host "  para todas as dependencias do Phoenix no Windows." -ForegroundColor Yellow
+        Write-Host ""
+        Write-Host "  Solucoes:" -ForegroundColor White
+        Write-Host "    1. Instale Python 3.12 (melhor compatibilidade de wheels):" -ForegroundColor DarkGray
+        Write-Host "       winget install Python.Python.3.12" -ForegroundColor DarkGray
+        Write-Host "       Depois re-execute: .\scripts\setup-phoenix.ps1 -Start" -ForegroundColor DarkGray
+        Write-Host ""
+        Write-Host "    2. Se ja tem Python 3.12 instalado, o script usara" -ForegroundColor DarkGray
+        Write-Host "       automaticamente via py launcher (py -3.12)." -ForegroundColor DarkGray
+        Write-Host ""
+        Write-Host "  Log de erro: $pipErrFile" -ForegroundColor DarkGray
+        exit 1
+    }
+}
 
 # Verificar instalação
-$phoenixVersion = & $python -c "import phoenix; print(phoenix.__version__)" 2>$null
+$phoenixVersion = Invoke-Python @("-c", "import phoenix; print(phoenix.__version__)")
 if (-not $phoenixVersion) {
-    Write-Fail "Falha na instalação do Phoenix"
+    Write-Fail "Falha na instalacao do Phoenix (modulo nao encontrado apos pip install)"
+    Write-Host "  Verifique o log: $pipErrFile" -ForegroundColor DarkGray
     exit 1
 }
 Write-Success "Phoenix v$phoenixVersion instalado"
@@ -325,7 +416,9 @@ if ($Start) {
     }
 
     # Iniciar em background
-    $phoenixProcess = Start-Process -FilePath $python -ArgumentList "-m", "phoenix.server.main", "serve" `
+    $serveArgs = @("-m", "phoenix.server.main", "serve")
+    if ($script:PythonArgs) { $serveArgs = @($script:PythonArgs) + $serveArgs }
+    $phoenixProcess = Start-Process -FilePath $script:PythonExe -ArgumentList $serveArgs `
         -WindowStyle Hidden `
         -PassThru `
         -RedirectStandardOutput $PhoenixLogFile `

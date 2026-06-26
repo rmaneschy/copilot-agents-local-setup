@@ -189,20 +189,40 @@ echo -e "  [1/3] Preparando ambiente Python..."
 
 mkdir -p "$PHOENIX_DIR"
 
-# Verificar Python
-if ! command -v python3 &>/dev/null; then
-    echo -e "${RED}  ERRO: Python 3 não encontrado.${NC}"
+# Verificar Python (requer 3.10+, preferencialmente 3.12 para compatibilidade de wheels)
+PYTHON_CMD=""
+for ver in python3.12 python3.13 python3.11 python3.10 python3.14 python3; do
+    if command -v "$ver" &>/dev/null; then
+        PYTHON_CMD="$ver"
+        break
+    fi
+done
+
+if [ -z "$PYTHON_CMD" ]; then
+    echo -e "${RED}  ERRO: Python 3 nao encontrado.${NC}"
     echo -e "${GRAY}    Instale: sudo apt install python3 python3-venv${NC}"
     exit 1
 fi
 
-PYTHON_VERSION=$(python3 --version 2>&1)
-echo -e "${GREEN}    OK: ${PYTHON_VERSION}${NC}"
+PYTHON_VERSION=$($PYTHON_CMD --version 2>&1)
+PY_MINOR=$($PYTHON_CMD -c "import sys; print(sys.version_info.minor)" 2>/dev/null || echo "0")
+
+if [ "$PY_MINOR" -lt 10 ]; then
+    echo -e "${RED}  ERRO: Python 3.10+ requerido (encontrado: $PYTHON_VERSION).${NC}"
+    echo -e "${GRAY}    Instale: sudo apt install python3.12 python3.12-venv${NC}"
+    exit 1
+fi
+
+echo -e "${GREEN}    OK: ${PYTHON_VERSION} (${PYTHON_CMD})${NC}"
+if [ "$PY_MINOR" -ge 14 ]; then
+    echo -e "${YELLOW}    AVISO: Python 3.14+ pode ter problemas de compatibilidade de wheels.${NC}"
+    echo -e "${YELLOW}    Recomendado: instalar python3.12 para melhor compatibilidade.${NC}"
+fi
 
 # Criar/atualizar venv
 if [ ! -f "${VENV_DIR}/bin/activate" ] || [ "$FORCE_REINSTALL" = true ]; then
     echo -e "${GRAY}    Criando virtualenv em ${VENV_DIR}...${NC}"
-    python3 -m venv "$VENV_DIR"
+    $PYTHON_CMD -m venv "$VENV_DIR"
 fi
 
 activate_venv
@@ -213,15 +233,24 @@ pip install --quiet --upgrade pip
 echo ""
 echo -e "  [2/3] Instalando Arize Phoenix + dependências OTEL..."
 
-# Instalar Phoenix e OpenTelemetry
-pip install --quiet \
+# Instalar Phoenix e OpenTelemetry (--only-binary para evitar compilacao)
+if ! pip install --quiet --only-binary :all: \
     "arize-phoenix[server]" \
     "opentelemetry-api" \
     "opentelemetry-sdk" \
     "opentelemetry-exporter-otlp-proto-grpc" \
-    "opentelemetry-semantic-conventions"
+    "opentelemetry-semantic-conventions" 2>/dev/null; then
 
-PHOENIX_VERSION=$(python3 -c "import phoenix; print(phoenix.__version__)" 2>/dev/null || echo "instalado")
+    echo -e "${YELLOW}    Fallback: tentando sem --only-binary...${NC}"
+    pip install --quiet \
+        "arize-phoenix[server]" \
+        "opentelemetry-api" \
+        "opentelemetry-sdk" \
+        "opentelemetry-exporter-otlp-proto-grpc" \
+        "opentelemetry-semantic-conventions"
+fi
+
+PHOENIX_VERSION=$(python -c "import phoenix; print(phoenix.__version__)" 2>/dev/null || echo "instalado")
 echo -e "${GREEN}    OK: Phoenix ${PHOENIX_VERSION}${NC}"
 
 # ─────────────────────────────────────────────────────────────────────────────
