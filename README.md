@@ -219,6 +219,7 @@ task check
 | Tools aparecem mas não retornam resultados | Executar `task index` para indexar o workspace |
 | Phoenix não recebe traces | Verificar se o `mcp.json` usa a versão com `--phoenix` e se Phoenix está rodando (`task status-phoenix`) |
 | `pip install` falha com `subprocess-exited-with-error` | Python 3.14+ pode não ter wheels pré-compiladas. Instale Python 3.12: `winget install Python.Python.3.12`. O script usará automaticamente via `py -3.12`. |
+| Serena: `projects key not found in Serena configuration` | O `serena_config.yml` não possui a chave `projects` (obrigatória desde Serena 1.1+). Re-execute `task install-serena` para corrigir automaticamente, ou adicione manualmente ao final do `~/.serena/serena_config.yml`: `projects:\n  - ~/workspace` |
 
 ---
 

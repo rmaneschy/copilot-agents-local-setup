@@ -525,11 +525,33 @@ if (-not (Test-Path $serenaGlobalDir)) {
 $serenaConfigFile = Join-Path $serenaGlobalDir "serena_config.yml"
 
 # Verificar se já existe para não sobrescrever customizações do usuário
-if (Test-Path $serenaConfigFile) {
-    Write-Host "    Arquivo serena_config.yml já existe." -ForegroundColor Gray
-    Write-Host "    Criando backup: serena_config.yml.bak" -ForegroundColor Gray
-    Copy-Item $serenaConfigFile "$serenaConfigFile.bak" -Force
+$configExists = Test-Path $serenaConfigFile
+if ($configExists) {
+    # Verificar se o config existente já tem a chave 'projects'
+    $existingContent = Get-Content $serenaConfigFile -Raw -ErrorAction SilentlyContinue
+    if ($existingContent -match '(?m)^projects:') {
+        Write-Host "    Configuração existente já contém chave 'projects'. Preservando." -ForegroundColor Gray
+        Write-Host "    Arquivo: $serenaConfigFile" -ForegroundColor Gray
+    } else {
+        # Config existe mas sem 'projects' — adicionar a chave
+        Write-Host "    AVISO: Config existente sem chave 'projects'. Adicionando..." -ForegroundColor Yellow
+        $projectsSection = @"
+
+# ─── Projects (obrigatório desde Serena 1.1+) ────────────────────────────────
+# Lista de caminhos de projetos registrados. O Serena exige esta chave.
+projects:
+  - $($WorkspacePath -replace '\\','/')
+"@
+        Add-Content -Path $serenaConfigFile -Value $projectsSection -Encoding UTF8
+        Write-Host "    OK: Chave 'projects' adicionada ao config existente." -ForegroundColor Green
+    }
+} else {
+    # Config não existe — criar do zero
+    Write-Host "    Criando novo serena_config.yml..." -ForegroundColor Gray
 }
+
+# Gerar config completo apenas se o arquivo não existia
+if (-not $configExists) {
 
 $configYaml = @"
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -640,12 +662,20 @@ ignored_memory_patterns:
 #   java:
 #     java.format.settings.url: "file:///path/to/eclipse-formatter.xml"
 #     java.completion.importOrder: ["java", "javax", "com", "org"]
+
+# ─── Projects (obrigatório desde Serena 1.1+) ────────────────────────────────
+# Lista de caminhos de projetos registrados. O Serena exige esta chave.
+# Adicione os caminhos dos projetos que deseja usar com o Serena.
+# O agente pode registrar projetos automaticamente via 'activate_project'.
+projects:
+  - $($WorkspacePath -replace '\\','/')
 "@
 
-Set-Content -Path $serenaConfigFile -Value $configYaml -Encoding UTF8
-Write-Host "    OK: serena_config.yml gerado em: $serenaConfigFile" -ForegroundColor Green
-Write-Host "    Dashboard: http://127.0.0.1:24282/dashboard/" -ForegroundColor Gray
-Write-Host "    Backend: JetBrains | Timeout: 120s | Planning mode: ativo" -ForegroundColor Gray
+    Set-Content -Path $serenaConfigFile -Value $configYaml -Encoding UTF8
+    Write-Host "    OK: serena_config.yml gerado em: $serenaConfigFile" -ForegroundColor Green
+    Write-Host "    Dashboard: http://127.0.0.1:24282/dashboard/" -ForegroundColor Gray
+    Write-Host "    Backend: JetBrains | Timeout: 120s | Planning mode: ativo" -ForegroundColor Gray
+}
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # Restaurar ambiente e verificação final

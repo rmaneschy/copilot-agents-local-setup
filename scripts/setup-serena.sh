@@ -133,45 +133,95 @@ SERENA_CONFIG_FILE="${SERENA_CONFIG_DIR}/serena_config.yml"
 mkdir -p "$SERENA_CONFIG_DIR"
 
 if [ ! -f "$SERENA_CONFIG_FILE" ] || [ "$FORCE_REINSTALL" = true ]; then
-    cat > "$SERENA_CONFIG_FILE" << 'EOF'
+    if [ -f "$SERENA_CONFIG_FILE" ]; then
+        cp "$SERENA_CONFIG_FILE" "${SERENA_CONFIG_FILE}.bak"
+        echo -e "${GRAY}    Backup: ${SERENA_CONFIG_FILE}.bak${NC}"
+    fi
+    cat > "$SERENA_CONFIG_FILE" << EOF
 # ═══════════════════════════════════════════════════════════════════════════════
-# Serena MCP — Configuração Global
+# SERENA GLOBAL CONFIG
+# Otimizado para IntelliJ + GitHub Copilot Agent Mode
+# Gerado automaticamente por setup-serena.sh
+# Documentação: https://oraios.github.io/serena/02-usage/050_configuration.html
 # ═══════════════════════════════════════════════════════════════════════════════
 
-# Backend LSP a ser utilizado
-# Opções: JetBrains, VSCode, Generic
-backend: JetBrains
+# ─── Backend ───────────────────────────────────────────────────────────────
+language_backend: JetBrains
+line_ending: native
 
-# Linguagens habilitadas para indexação LSP
-languages:
-  - java
-  - kotlin
-  - typescript
-  - python
-  - go
+# ─── Dashboard Web ──────────────────────────────────────────────────────────
+web_dashboard: True
+web_dashboard_open_on_launch: False
+web_dashboard_interface: browser
+web_dashboard_listen_address: 127.0.0.1
 
-# Configurações de performance
-indexing:
-  # Máximo de arquivos para indexar por projeto
-  max_files: 50000
-  # Excluir padrões
-  exclude_patterns:
-    - "**/node_modules/**"
-    - "**/build/**"
-    - "**/target/**"
-    - "**/.gradle/**"
-    - "**/dist/**"
-    - "**/__pycache__/**"
-    - "**/.venv/**"
+# ─── JetBrains Integration ─────────────────────────────────────────────────
+jetbrains_plugin_server_address: 127.0.0.1
 
-# Logging
-logging:
-  level: INFO
-  file: ~/.serena/serena.log
+# ─── Logging ───────────────────────────────────────────────────────────────
+log_level: 20
+gui_log_window: False
+trace_lsp_communication: False
+
+# ─── Performance ───────────────────────────────────────────────────────────
+tool_timeout: 120
+default_max_tool_answer_chars: 150000
+token_count_estimator: CHAR_COUNT
+
+# ─── Modes ────────────────────────────────────────────────────────────────
+base_modes:
+  - interactive
+  - editing
+default_modes:
+  - planning
+
+# ─── Paths Ignorados Globalmente ───────────────────────────────────────────
+ignored_paths:
+  - "**/node_modules/**"
+  - "**/target/**"
+  - "**/build/**"
+  - "**/.gradle/**"
+  - "**/dist/**"
+  - "**/.idea/**"
+  - "**/.git/**"
+  - "**/vendor/**"
+  - "**/__pycache__/**"
+  - "**/bin/**"
+  - "**/obj/**"
+
+# ─── Tools ────────────────────────────────────────────────────────────────
+excluded_tools: []
+included_optional_tools: []
+
+# ─── Memories ─────────────────────────────────────────────────────────────
+read_only_memory_patterns:
+  - "global/.*"
+ignored_memory_patterns:
+  - "_archive/.*"
+  - "_episodes/.*"
+
+# ─── Projects (obrigatório desde Serena 1.1+) ────────────────────────────────
+# Lista de caminhos de projetos registrados. O Serena exige esta chave.
+# Adicione os caminhos dos projetos que deseja usar com o Serena.
+# O agente pode registrar projetos automaticamente via 'activate_project'.
+projects:
+  - ${WORKSPACE_PATH}
 EOF
     echo -e "${GREEN}    OK: Configuração criada em ${SERENA_CONFIG_FILE}${NC}"
 else
-    echo -e "${CYAN}    Configuração existente preservada: ${SERENA_CONFIG_FILE}${NC}"
+    # Verificar se o config existente tem a chave 'projects'
+    if ! grep -q "^projects:" "$SERENA_CONFIG_FILE" 2>/dev/null; then
+        echo -e "${YELLOW}    AVISO: Adicionando chave 'projects' ao config existente...${NC}"
+        cat >> "$SERENA_CONFIG_FILE" << EOF
+
+# ─── Projects (obrigatório desde Serena 1.1+) ────────────────────────────────
+projects:
+  - ${WORKSPACE_PATH}
+EOF
+        echo -e "${GREEN}    OK: Chave 'projects' adicionada${NC}"
+    else
+        echo -e "${CYAN}    Configuração existente preservada: ${SERENA_CONFIG_FILE}${NC}"
+    fi
 fi
 
 # ─────────────────────────────────────────────────────────────────────────────
